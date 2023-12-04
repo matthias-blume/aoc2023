@@ -55,7 +55,7 @@ fn minimum_triplet_power(triplets: &Vec<(u32, u32, u32)>) -> u32 {
 }
 
 fn main() {
-   let args: Vec<String> = env::args().collect();
+    let args: Vec<String> = env::args().collect();
 
     let file_path = &args[1];
     let red: u32 = args[2].parse().unwrap();
