@@ -12,9 +12,7 @@ fn read_color(input: &str) -> (u32, u32, u32) {
     }
 }
 
-fn add_triplet(x: (u32, u32, u32), y: (u32, u32, u32)) -> (u32, u32, u32) {
-    let (xr, xg, xb) = x;
-    let (yr, yg, yb) = y;
+fn add_triplet((xr, xg, xb): (u32, u32, u32), (yr, yg, yb): (u32, u32, u32)) -> (u32, u32, u32) {
     (xr + yr, xg + yg, xb + yb)
 }
 
@@ -27,8 +25,10 @@ fn read_triplets(input: &str) -> Vec<(u32, u32, u32)> {
 }
 
 fn read_game_number(input: &str) -> u32 {
-    let v: Vec<&str> = input.split_whitespace().collect();
-    v[1].parse().unwrap()
+    match input.split_whitespace().collect::<Vec<&str>>().as_slice() {
+        ["Game", number_str] => number_str.parse().expect("number"),
+        _ => panic!("missing or malformed Game spec"),
+    }
 }
 
 
@@ -37,8 +37,7 @@ fn read_game(line: &str) -> (u32, Vec<(u32, u32, u32)>) {
     (read_game_number(v[0]), read_triplets(v[1]))
 }
 
-fn triplet_possible(red: u32, green: u32, blue: u32, x: &(u32, u32, u32)) -> bool {
-    let (r, g, b) = x;
+fn triplet_possible(red: u32, green: u32, blue: u32, (r, g, b): &(u32, u32, u32)) -> bool {
     *r <= red && *g <= green && *b <= blue
 }
 

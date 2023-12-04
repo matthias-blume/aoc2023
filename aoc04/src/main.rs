@@ -3,7 +3,7 @@ use std::fs;
 use std::collections::HashSet;
 use std::collections::HashMap;
 
-fn score_card(input: &str, multipliers: &mut HashMap<u32, u32>) -> u32 {
+fn score_card(input: &str, multipliers: &mut HashMap<u32, u32>) -> (u32, u32) {
     let name_data_str: Vec<&str> = input.split(":").collect();
     let name_str = name_data_str[0];
     let card_number_str: Vec<&str> = name_str.split_whitespace().collect();
@@ -22,7 +22,8 @@ fn score_card(input: &str, multipliers: &mut HashMap<u32, u32>) -> u32 {
     for won_card in number+1..number+1+count {
         *multipliers.entry(won_card).or_insert(1) += multiplier;
     }
-    multiplier
+    let points = if count > 0 { 1 << (count - 1) } else { 0 };  // for part 1
+    (points, multiplier)
 }
 
 fn main() {
@@ -34,11 +35,14 @@ fn main() {
         .expect("Could not read file");
 
     let mut multipliers = HashMap::new();
-    let mut sum: u32 = 0;
+    let mut points_sum: u32 = 0;  // answer to part 1
+    let mut card_count: u32 = 0;  // answer to part 2
 
     for line in contents.lines() {
-        sum += score_card(line, &mut multipliers);
+        let (p, c) = score_card(line, &mut multipliers);
+        points_sum += p;
+        card_count += c;
     }
 
-    println!("Sum of scores is {sum}.");
+    println!("Points sum is {points_sum}, number of collected cards is {card_count}.");
 }
