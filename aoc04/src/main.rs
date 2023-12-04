@@ -7,8 +7,8 @@ fn score_card(input: &str, multipliers: &mut HashMap<u32, u32>) -> (u32, u32) {
     let name_data_str: Vec<&str> = input.split(":").collect();
     let name_str = name_data_str[0];
     let card_number_str: Vec<&str> = name_str.split_whitespace().collect();
-    let number: u32 = card_number_str[1].parse().unwrap();
-    let multiplier: u32 = *multipliers.entry(number).or_insert(1);
+    let number: u32 = card_number_str[1].parse().expect("card number");
+    let multiplier: u32 = *multipliers.get(&number).unwrap_or(&1);
     let data_str = name_data_str[1];
     let winning_have_str: Vec<&str> = data_str.split("|").collect();
     let winning: HashSet<u32> = winning_have_str[0].split_whitespace().map(|s| s.parse().unwrap()).collect();
@@ -19,7 +19,7 @@ fn score_card(input: &str, multipliers: &mut HashMap<u32, u32>) -> (u32, u32) {
             count = count+1
         }
     }
-    for won_card in number+1..number+1+count {
+    for won_card in number+1..=number+count {
         *multipliers.entry(won_card).or_insert(1) += multiplier;
     }
     let points = if count > 0 { 1 << (count - 1) } else { 0 };  // for part 1

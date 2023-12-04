@@ -42,7 +42,7 @@ fn numbers_of(line: &str) -> Vec<(u32, i32, i32)> {
 }
 
 fn has_symbol_within_range(start: i32, end: i32, set: &HashSet<i32>) -> bool {
-    (start-1 .. end+2).any(|pos| set.contains(&pos))
+    (start-1..=end+1).any(|pos| set.contains(&pos))
 }
 
 fn has_adjacent_symbol(start: i32, end: i32, prev: &HashSet<i32>, cur: &HashSet<i32>, next: &HashSet<i32>) -> bool {
