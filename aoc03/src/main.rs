@@ -21,7 +21,9 @@ fn symbol_and_star_locations_of(line: &str) -> (HashSet<i32>, HashSet<i32>) {
 // Each number is represented as a triplet: (value, start, end).
 // The pair (start, end) marks the starting and ending positions
 // within the line where the number was found.  Both are inclusive.
-fn numbers_of(line: &str) -> Vec<(u32, i32, i32)> {
+struct Number(u32, i32, i32);
+
+fn numbers_of(line: &str) -> Vec<Number> {
     let mut cur = None;
     let mut start: i32 = 0;
     let mut pos: i32 = 0;
@@ -30,19 +32,19 @@ fn numbers_of(line: &str) -> Vec<(u32, i32, i32)> {
         match (c.is_digit(10), cur) {
             (true, Some(value)) => cur = Some(10 * value + c as u32 - '0' as u32),
             (true, None) => { cur = Some(c as u32 - '0' as u32); start = pos },
-            (false, Some(value)) => { numbers.push((value, start, pos-1)); cur = None },
+            (false, Some(value)) => { numbers.push(Number(value, start, pos-1)); cur = None },
             _ => (),
         }
         pos = pos + 1
     }
     if let Some(value) = cur {
-        numbers.push((value, start, pos-1))
+        numbers.push(Number(value, start, pos-1))
     }
     numbers
 }
 
 fn has_symbol_within_range(start: i32, end: i32, set: &HashSet<i32>) -> bool {
-    (start-1 .. end+2).any(|pos| set.contains(&pos))
+    (start-1..=end+1).any(|pos| set.contains(&pos))
 }
 
 fn has_adjacent_symbol(start: i32, end: i32, prev: &HashSet<i32>, cur: &HashSet<i32>, next: &HashSet<i32>) -> bool {
@@ -52,9 +54,9 @@ fn has_adjacent_symbol(start: i32, end: i32, prev: &HashSet<i32>, cur: &HashSet<
         || has_symbol_within_range(start, end, next)
 }
 
-fn parts_sum_of(numbers: &Vec<(u32, i32, i32)>, prev: &HashSet<i32>, cur: &HashSet<i32>, next: &HashSet<i32>) -> u32 {
+fn parts_sum_of(numbers: &Vec<Number>, prev: &HashSet<i32>, cur: &HashSet<i32>, next: &HashSet<i32>) -> u32 {
     let mut sum: u32 = 0;
-    for (number, start, end) in numbers.iter() {
+    for Number(number, start, end) in numbers.iter() {
         if has_adjacent_symbol(*start, *end, prev, cur, next) {
             sum += number;
         }
@@ -62,15 +64,15 @@ fn parts_sum_of(numbers: &Vec<(u32, i32, i32)>, prev: &HashSet<i32>, cur: &HashS
     sum
 }
 
-fn collect_adjacents(star: i32, numbers: &Vec<(u32, i32, i32)>, adjacents: &mut Vec<u32>) {
-    for (value, start, end) in numbers {
+fn collect_adjacents(star: i32, numbers: &Vec<Number>, adjacents: &mut Vec<u32>) {
+    for Number(value, start, end) in numbers {
         if star >= start-1 && star <= end+1 {
             adjacents.push(*value);
         }
     }
 }
 
-fn gear_ratio_sum_of(stars: &HashSet<i32>, prev: &Vec<(u32, i32, i32)>, cur: &Vec<(u32, i32, i32)>, next: &Vec<(u32, i32, i32)>) -> u32 {
+fn gear_ratio_sum_of(stars: &HashSet<i32>, prev: &Vec<Number>, cur: &Vec<Number>, next: &Vec<Number>) -> u32 {
     let mut sum: u32 = 0;
     for star in stars {
         let mut adjacents = Vec::new();
