@@ -64,7 +64,6 @@ fn parts_sum_of(numbers: &Vec<(u32, i32, i32)>, prev: &HashSet<i32>, cur: &HashS
     let mut sum: u32 = 0;
     for (number, start, end) in numbers.iter() {
         if has_adjacent_symbol(start, end, prev, cur, next) {
-            println!("include {number}");
             sum += *number;
         }
     }
