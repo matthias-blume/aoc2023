@@ -2,20 +2,11 @@ use std::env;
 use std::fs::File;
 use std::path::Path;
 use std::io::{BufRead, BufReader};
-use std::cmp::max;
 
-fn num_winning_inputs(time_limit: u64, previous_max: u64) -> i64 {
-    let tl = time_limit as f64;
-    let tl2 = tl / 2.0;
-    let pm = previous_max as f64;
-    let d = tl2 * tl2 - pm - 1.0;
-    if d < 0.0 { 0 }
-    else {
-        let r = d.sqrt();
-        let x1 = (tl2 - r).ceil() as i64;
-        let x2 = (tl2 + r).floor() as i64;
-        max(x2 - x1 + 1, 0)
-    }
+fn num_winning_inputs((&time_limit, &previous_max): (&f64, &f64)) -> f64 {
+    let tl2 = time_limit / 2.0;
+    let r = (tl2 * tl2 - previous_max - 1.0).sqrt();
+    (tl2 + r).floor() - (tl2 - r).ceil() + 1.0
 }
 
 fn main() {
@@ -39,10 +30,10 @@ fn main() {
             }
         }
 
-        let result =
+        let result: f64 =
             times.iter().zip(distances.iter())
-            .map(|(&t, &d)| num_winning_inputs(t, d))
-            .fold(1, |x, y| x * y);
+            .map(num_winning_inputs)
+            .product();
 
         println!("{result}");
 
