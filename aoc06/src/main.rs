@@ -31,13 +31,18 @@ fn main() {
         for line_result in reader.lines() {
             let line = line_result.expect("line");
             match line.split_whitespace().collect::<Vec<_>>().as_slice() {
-                ["Time:", times_str @ ..] => times = times_str.iter().map(|s| s.parse().unwrap()).collect(),
-                ["Distance:", distances_str @ ..] => distances = distances_str.iter().map(|s| s.parse().unwrap()).collect(),
+                ["Time:", times_str @ ..] =>
+                    times = times_str.iter().map(|s| s.parse().unwrap()).collect(),
+                ["Distance:", distances_str @ ..] =>
+                    distances = distances_str.iter().map(|s| s.parse().unwrap()).collect(),
                 _ => panic!("invalid input"),
             }
         }
 
-        let result = times.iter().zip(distances.iter()).map(|(&t, &d)| num_winning_inputs(t, d)).fold(1, |x, y| x * y);
+        let result =
+            times.iter().zip(distances.iter())
+            .map(|(&t, &d)| num_winning_inputs(t, d))
+            .fold(1, |x, y| x * y);
 
         println!("{result}");
 
