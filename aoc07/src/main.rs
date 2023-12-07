@@ -16,7 +16,7 @@ enum HandType {
 
 #[derive(Debug, Ord, PartialOrd, Eq, PartialEq, Clone, Copy)]
 enum CardType {
-    CJ,
+    CJoker,
     C2,
     C3,
     C4,
@@ -26,6 +26,7 @@ enum CardType {
     C8,
     C9,
     CT,
+    CJ,
     CQ,
     CK,
     CA,
@@ -34,7 +35,7 @@ enum CardType {
 #[derive(Debug, Ord, PartialOrd, Eq, PartialEq)]
 struct Hand(HandType, CardType, CardType, CardType, CardType, CardType);
 
-fn card_type(c: char) -> CardType {
+fn card_type(c: char, treat_j_as_joker: bool) -> CardType {
     match c {
         '2' => CardType::C2,
         '3' => CardType::C3,
@@ -45,6 +46,7 @@ fn card_type(c: char) -> CardType {
         '8' => CardType::C8,
         '9' => CardType::C9,
         'T' => CardType::CT,
+        'J' if treat_j_as_joker => CardType::CJoker,
         'J' => CardType::CJ,
         'Q' => CardType::CQ,
         'K' => CardType::CK,
@@ -53,24 +55,8 @@ fn card_type(c: char) -> CardType {
     }
 }
 
-const TYPES: &'static [CardType] =
-    &[CardType::C2, CardType::C3, CardType::C4, CardType::C5, CardType::C6,
-      CardType::C7, CardType::C8, CardType::C9, CardType::CT, CardType::CJ,
-      CardType::CQ, CardType::CK, CardType::CA];
-
-fn run_with_augmented(j: i32, v: &mut Vec<CardType>, f: &mut impl FnMut(&Vec<CardType>) -> ()) {
-    if j == 0 { f(&v) }
-    else {
-        for t in TYPES {
-            v.push(*t);
-            run_with_augmented(j-1, v, f);
-            v.pop();
-        }
-    }
-}
-
-fn plain_hand_type(orig: &Vec<CardType>) -> HandType {
-    let mut types = orig.clone();
+fn hand_type(mut types: Vec<CardType>) -> HandType {
+    let jokers = types.iter().filter(|&t| t == &CardType::CJoker).count();
     types.sort();
     let mut counts = Vec::new();
     let mut n = 1;
@@ -87,34 +73,32 @@ fn plain_hand_type(orig: &Vec<CardType>) -> HandType {
     }
     counts.push(n);
     counts.sort();
-    match counts.as_slice() {
-        [5] => HandType::FiveOfAKind,
-        [1, 4] => HandType::FourOfAKind,
-        [2, 3] => HandType::FullHouse,
-        [1, 1, 3] => HandType::ThreeOfAKind,
-        [1, 2, 2] => HandType::TwoPair,
-        [1, 1, 1, 2] => HandType::OnePair,
-        [1, 1, 1, 1, 1] => HandType::HighCard,
+    match (counts.as_slice(), jokers) {
+        ([5], _) => HandType::FiveOfAKind,
+        ([1, 4], 0) => HandType::FourOfAKind,
+        ([1, 4], _) => HandType::FiveOfAKind,
+        ([2, 3], 0) => HandType::FullHouse,
+        ([2, 3], _) => HandType::FiveOfAKind,
+        ([1, 1, 3], 0) => HandType::ThreeOfAKind,
+        ([1, 1, 3], _) => HandType::FourOfAKind,
+        ([1, 2, 2], 0) => HandType::TwoPair,
+        ([1, 2, 2], 1) => HandType::FullHouse,
+        ([1, 2, 2], 2) => HandType::FourOfAKind,
+        ([1, 1, 1, 2], 0) => HandType::OnePair,
+        ([1, 1, 1, 2], _) => HandType::ThreeOfAKind,
+        ([1, 1, 1, 1, 1], 0) => HandType::HighCard,
+        ([1, 1, 1, 1, 1], 1) => HandType::OnePair,
         _ => panic!("bad card counts {:?} {:?}", counts, types),
     }
 }
 
-fn hand_type(orig: Vec<CardType>) -> HandType {
-    let mut best_ct: Vec<CardType> = orig.clone();
-    let mut best_ht = plain_hand_type(&best_ct);
-    let mut types: Vec<CardType> = orig.into_iter().filter(|&t| t != CardType::CJ).collect();
-    let num_j = 5 - types.len() as i32;
-    run_with_augmented(num_j, &mut types, &mut |t| { let ht = plain_hand_type(t); if ht > best_ht { best_ct = t.clone(); best_ht = ht } });
-    best_ht
-}
-
-fn hand(s: &str) -> Hand {
+fn hand(s: &str, treat_j_as_joker: bool) -> Hand {
     if s.len() != 5 { panic!("hand of wrong size") }
-    let c1 = card_type(s.chars().nth(0).unwrap());
-    let c2 = card_type(s.chars().nth(1).unwrap());
-    let c3 = card_type(s.chars().nth(2).unwrap());
-    let c4 = card_type(s.chars().nth(3).unwrap());
-    let c5 = card_type(s.chars().nth(4).unwrap());
+    let c1 = card_type(s.chars().nth(0).unwrap(), treat_j_as_joker);
+    let c2 = card_type(s.chars().nth(1).unwrap(), treat_j_as_joker);
+    let c3 = card_type(s.chars().nth(2).unwrap(), treat_j_as_joker);
+    let c4 = card_type(s.chars().nth(3).unwrap(), treat_j_as_joker);
+    let c5 = card_type(s.chars().nth(4).unwrap(), treat_j_as_joker);
 
     Hand(hand_type(Vec::from([c1, c2, c3, c4, c5])), c1, c2, c3, c4, c5)
 }
@@ -128,6 +112,11 @@ fn main() {
     let file_path =
         if let Some(arg) = args.next() { arg }
         else { panic!("{}: no file path argument", program) };
+    let treat_j_as_joker =
+        match args.next() {
+            Some(arg) if arg == "--treat_j_as_joker" => true,
+            _ => false
+        };
 
     let path = Path::new(&file_path);
     let file = File::open(&path).expect("open file");
@@ -138,7 +127,7 @@ fn main() {
     for line_result in reader.lines() {
         let line = line_result.expect("line");
         match line.split_whitespace().collect::<Vec<_>>().as_slice() {
-            [h, b] => hand_bid_table.push((hand(h), b.parse::<u64>().unwrap())), 
+            [h, b] => hand_bid_table.push((hand(h, treat_j_as_joker), b.parse::<u64>().unwrap())), 
             _ => panic!("invalid input"),
         }
     }
