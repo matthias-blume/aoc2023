@@ -68,10 +68,12 @@ fn main() {
         }
     }
 
-    let state = directions.iter().map(|d| d.0).filter(|x| x.chars().nth(2).unwrap() == 'A').collect::<Vec<_>>();
-    let mut steps = state.iter().map(|s| calc_steps(&rl, s, &directions));
-    let step0 = steps.next().unwrap();
-    let result = steps.fold(step0, lcm);
+    let result = directions
+        .iter()
+        .map(|d| d.0)
+        .filter(|x| x.chars().nth(2).unwrap() == 'A')
+        .map(|s| calc_steps(&rl, s, &directions))
+        .fold(1, lcm);
   
     println!("{result}");
 }
