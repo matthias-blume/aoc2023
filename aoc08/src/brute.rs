@@ -27,6 +27,10 @@ fn ends_with(state: &String, c: char) -> bool {
     state.chars().nth(2).unwrap() == c
 }
 
+fn big_transition<'a>(big_state: &Vec<&String>, transitions: &'a HashMap<String, String>) -> Vec<&'a String> {
+    big_state.iter().map(|s| transition(s, transitions)).collect()
+}
+
 fn calc_steps(initial: &String, transitions: &HashMap<String, String>) -> u64 {
     let mut state = initial;
     let mut n = 0;
@@ -35,6 +39,24 @@ fn calc_steps(initial: &String, transitions: &HashMap<String, String>) -> u64 {
         n += 1;
     }
     n
+}
+
+fn is_big_end_state(state: &Vec<&String>) -> bool {
+    state.iter().all(|s| ends_with(s, 'Z'))
+}
+
+fn count_big_steps(initial: &Vec<&String>, transitions: &HashMap<String, String>) -> u64 {
+    let mut state = initial.clone();
+    let mut n = 0;
+    while !is_big_end_state(&state) {
+        state = big_transition(&state, transitions);
+        n += 1
+    }
+    n
+}
+
+fn initial_big_state<'a>(directions: &'a HashMap<String, (String, String)>) -> Vec<&'a String> {
+    directions.iter().filter_map(|d| if ends_with(d.0, 'A') { Some(d.0) } else { None }).collect()
 }
 
 fn gcd(x0: u64, y0: u64) -> u64 {
@@ -84,10 +106,7 @@ fn main() {
     }
 
     let rllen = rl.len() as u64;
-    let transitions = directions
-        .iter()
-        .map(|d| (d.0.to_string(), all_steps(&rl, d.0, &directions).to_string()))
-        .collect::<HashMap<_, _>>();
+    let transitions = directions.iter().map(|d| (d.0.to_string(), all_steps(&rl, d.0, &directions).to_string())).collect::<HashMap<_, _>>();
     
     let result = directions
         .iter()
@@ -98,4 +117,10 @@ fn main() {
         * rllen;
   
     println!("lucky guess {result}");
+
+    let big_start = initial_big_state(&directions);
+    let big_result = count_big_steps(&big_start, &transitions) * rllen;
+
+    println!("brute force: {big_result}");
+    
 }
