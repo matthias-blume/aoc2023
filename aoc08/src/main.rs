@@ -20,13 +20,10 @@ fn calc_steps(rl: &String, initial: &String, directions: &HashMap<String, (Strin
 }
 
 fn gcd(x0: u64, y0: u64) -> u64 {
-    let mut x = x0;
-    let mut y = y0;
-    if x > y { let z = x; x = y; y = z }
+    let (mut x, mut y) = (x0, y0);
+    if x > y { (x, y) = (y, x) }
     while x > 0 {
-        let z = y % x;
-        y = x;
-        x = z;
+        (x, y) = (y % x, x)
     }
     y
 }
