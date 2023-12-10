@@ -54,14 +54,7 @@ fn start_col(line: &Row) -> Option<usize> {
 }
 
 fn start_row_col(board: &Board) -> Option<(usize, usize)> {
-    let mut row = 0;
-    for line in board.iter() {
-        if let Some(col) = start_col(line) {
-            return Some((row, col))
-        }
-        row += 1
-    }
-    None
+    board.iter().enumerate().find_map(|(r, row)| start_col(row).map(|c| (r, c)))
 }
 
 fn blank_board(board: &Board) -> Board {
@@ -77,13 +70,15 @@ fn opposite(d: Direction) -> Direction {
     }
 }
 
-fn loop_length_and_board(coming_from: Direction, r0: usize, c0: usize, board: &Board) -> Option<(usize, Board)> {
-    let rows = board.len();
-    let cols = board[0].len();
+fn board_dimensions(board: &Board) -> (usize, usize) {
+    (board.len(), board[0].len())
+}
+
+fn loop_length_and_board(coming_from: Direction, start_pos: (usize, usize), board: &Board) -> Option<(usize, Board)> {
+    let (rows, cols) = board_dimensions(board);
     let mut prev = coming_from;
     let mut steps = 0;
-    let mut r = r0;
-    let mut c = c0;
+    let (mut r, mut c) = start_pos;
     let mut loop_board = blank_board(&board);
     loop {
         if r >= rows || c >= cols {
@@ -103,7 +98,7 @@ fn loop_length_and_board(coming_from: Direction, r0: usize, c0: usize, board: &B
                     _ => panic!("impossible start tile"),
                 };
                 loop_board[r][c] = start_tile;
-                return Some((steps, loop_board))
+                return Some(((steps + 1) / 2, loop_board))
             },
             (West, EW) => c += 1,
             (East, EW) if c > 0 => c -= 1,
@@ -124,38 +119,37 @@ fn loop_length_and_board(coming_from: Direction, r0: usize, c0: usize, board: &B
 }
 
 fn loop_diameter_and_board(board: &Board) -> Option<(usize, Board)> {
+    let (rows, cols) = board_dimensions(board);
     let (srow, scol) = start_row_col(board)?;
-    if let Some((steps, lb)) = loop_length_and_board(West, srow, scol+1, board) {
-        return Some(((steps + 1) / 2, lb))
+    let mut candidates = Vec::new();
+    if scol < cols - 1 {
+        candidates.push((West, (srow, scol+1)))
     }
-    if let Some((steps, lb)) = loop_length_and_board(East, srow, scol-1, board) {
-        return Some(((steps + 1) / 2, lb))
+    if srow < rows - 1 {
+        candidates.push((North, (srow+1, scol)))
     }
-    if let Some((steps, lb)) = loop_length_and_board(North, srow+1, scol, board) {
-        return Some(((steps + 1) / 2, lb))
+    if scol > 0 {
+        candidates.push((East, (srow, scol-1)))
     }
-    None
+    candidates.iter().find_map(|&(d, p)| loop_length_and_board(d, p, board))
 }
 
-fn count_inside(lb: &Board) -> usize {
-    let mut n = 0;
-    for row in lb.iter() {
-        let mut inside = false;
-        let mut was_north = false;
-        for tile in row.iter() {
-            match tile {
-                Ground => { if inside { n += 1 } },
-                EW => (),
-                NS => inside = !inside,
-                NE => was_north = true,
-                SE => was_north = false,
-                NW => { if !was_north { inside = !inside } },
-                SW => { if was_north { inside = !inside } },
-                _ => panic!("unexpected tile"),
-            }
-        }
-    }
-    n           
+fn count_inside(loop_board: &Board) -> usize {
+    loop_board.iter()
+        .map(|row| row.iter()
+             .fold((false, false, 0), |state @ (inside, was_north, n), tile|
+                   match tile {
+                       Ground => (inside, was_north, if inside { n+1 } else { n }),
+                       EW => state,
+                       NS => (!inside, was_north, n),
+                       NE => (inside, true, n),
+                       SE => (inside, false, n),
+                       NW => (was_north == inside, was_north, n),
+                       SW => (was_north != inside, was_north, n),
+                       Start => panic!("unexpected Start tile on loop boad"),
+                   })
+             .2)
+        .sum()
 }
 
 fn main() {
