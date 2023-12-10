@@ -38,19 +38,20 @@ fn read_tile(c: char) -> Tile {
     }
 }
 
-fn read_line(l: &str) -> Vec<Tile> {
+type Row = Vec<Tile>;
+type Board = Vec<Vec<Tile>>;
+
+fn read_row(l: &str) -> Row {
     l.chars().map(read_tile).collect()
 }
 
-fn read_board(c: &str) -> Vec<Vec<Tile>> {
-    c.lines().map(read_line).collect()
+fn read_board(c: &str) -> Board {
+    c.lines().map(read_row).collect()
 }
 
-fn start_col(line: &Vec<Tile>) -> Option<usize> {
+fn start_col(line: &Row) -> Option<usize> {
     line.iter().position(|&x| x == Start)
 }
-
-type Board = Vec<Vec<Tile>>;
 
 fn start_row_col(board: &Board) -> Option<(usize, usize)> {
     let mut row = 0;
@@ -76,7 +77,7 @@ fn opposite(d: Direction) -> Direction {
     }
 }
 
-fn count_to_start(coming_from: Direction, r0: usize, c0: usize, board: &Board) -> Option<(usize, Board)> {
+fn loop_length_and_board(coming_from: Direction, r0: usize, c0: usize, board: &Board) -> Option<(usize, Board)> {
     let rows = board.len();
     let cols = board[0].len();
     let mut prev = coming_from;
@@ -122,15 +123,15 @@ fn count_to_start(coming_from: Direction, r0: usize, c0: usize, board: &Board) -
     }
 }
 
-fn loop_length_from_start(board: &Vec<Vec<Tile>>) -> Option<(usize, Board)> {
+fn loop_diameter_and_board(board: &Board) -> Option<(usize, Board)> {
     let (srow, scol) = start_row_col(board)?;
-    if let Some((steps, lb)) = count_to_start(West, srow, scol+1, board) {
+    if let Some((steps, lb)) = loop_length_and_board(West, srow, scol+1, board) {
         return Some(((steps + 1) / 2, lb))
     }
-    if let Some((steps, lb)) = count_to_start(East, srow, scol-1, board) {
+    if let Some((steps, lb)) = loop_length_and_board(East, srow, scol-1, board) {
         return Some(((steps + 1) / 2, lb))
     }
-    if let Some((steps, lb)) = count_to_start(North, srow+1, scol, board) {
+    if let Some((steps, lb)) = loop_length_and_board(North, srow+1, scol, board) {
         return Some(((steps + 1) / 2, lb))
     }
     None
@@ -172,9 +173,9 @@ fn main() {
         .expect("Could not read file");
 
     let board = read_board(&contents);
-    if let Some((result, loop_board)) = loop_length_from_start(&board) {
+    if let Some((diameter, loop_board)) = loop_diameter_and_board(&board) {
         let inside = count_inside(&loop_board);
-        println!("{result} {inside}")
+        println!("{diameter} {inside}")
     } else {
         panic!("no solution")
     }
