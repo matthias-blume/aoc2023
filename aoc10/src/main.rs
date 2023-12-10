@@ -40,6 +40,7 @@ fn read_tile(c: char) -> Tile {
 
 type Row = Vec<Tile>;
 type Board = Vec<Vec<Tile>>;
+type Pos = (usize, usize);
 
 fn read_row(l: &str) -> Row {
     l.chars().map(read_tile).collect()
@@ -53,7 +54,7 @@ fn start_col(line: &Row) -> Option<usize> {
     line.iter().position(|&x| x == Start)
 }
 
-fn start_row_col(board: &Board) -> Option<(usize, usize)> {
+fn start_pos(board: &Board) -> Option<Pos> {
     board.iter().enumerate().find_map(|(r, row)| start_col(row).map(|c| (r, c)))
 }
 
@@ -70,11 +71,15 @@ fn opposite(d: Direction) -> Direction {
     }
 }
 
-fn board_dimensions(board: &Board) -> (usize, usize) {
+fn board_dimensions(board: &Board) -> Pos {
     (board.len(), board[0].len())
 }
 
-fn loop_length_and_board(coming_from: Direction, start_pos: (usize, usize), board: &Board) -> Option<(usize, Board)> {
+type LoopDistanceAndBoard = (usize, Board);
+
+fn loop_info_from_adjacent(
+    coming_from: Direction, start_pos: Pos, board: &Board)
+    -> Option<LoopDistanceAndBoard> {
     let (rows, cols) = board_dimensions(board);
     let mut prev = coming_from;
     let mut steps = 0;
@@ -118,20 +123,20 @@ fn loop_length_and_board(coming_from: Direction, start_pos: (usize, usize), boar
     }
 }
 
-fn loop_diameter_and_board(board: &Board) -> Option<(usize, Board)> {
+fn loop_info(board: &Board) -> Option<LoopDistanceAndBoard> {
     let (rows, cols) = board_dimensions(board);
-    let (srow, scol) = start_row_col(board)?;
-    let mut candidates = Vec::new();
+    let (srow, scol) = start_pos(board)?;
+    let mut adjacents = Vec::new();
     if scol < cols - 1 {
-        candidates.push((West, (srow, scol+1)))
+        adjacents.push((West, (srow, scol+1)))
     }
     if srow < rows - 1 {
-        candidates.push((North, (srow+1, scol)))
+        adjacents.push((North, (srow+1, scol)))
     }
     if scol > 0 {
-        candidates.push((East, (srow, scol-1)))
+        adjacents.push((East, (srow, scol-1)))
     }
-    candidates.iter().find_map(|&(d, p)| loop_length_and_board(d, p, board))
+    adjacents.iter().find_map(|&(d, p)| loop_info_from_adjacent(d, p, board))
 }
 
 fn count_inside(loop_board: &Board) -> usize {
@@ -167,10 +172,10 @@ fn main() {
         .expect("Could not read file");
 
     let board = read_board(&contents);
-    if let Some((diameter, loop_board)) = loop_diameter_and_board(&board) {
+    if let Some((distance, loop_board)) = loop_info(&board) {
         let inside = count_inside(&loop_board);
-        println!("{diameter} {inside}")
+        println!("{distance} {inside}")
     } else {
-        panic!("no solution")
+        panic!("no loop found")
     }
 }
