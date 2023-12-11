@@ -1,7 +1,10 @@
 use std::env;
 use std::fs;
+use std::collections::HashSet;
 
 type Pos = (usize, usize);
+type HalfTransform = Vec<usize>;
+type CoordTransform = (HalfTransform, HalfTransform);
 
 fn read_galaxies(contents: &str) -> Vec<Pos> {
     contents
@@ -18,34 +21,34 @@ fn read_galaxies(contents: &str) -> Vec<Pos> {
         .collect()
 }
 
-fn compute_stretch<'a>(
+fn half_transform<'a>(
     factor: usize, galaxies: &'a Vec<Pos>, select: impl Fn(&'a Pos) -> usize)
-    -> Vec<usize> {
-    let len = 1 + galaxies.iter().map(&select).max().unwrap_or(0);
-    (0..len).scan(0, |stretch, i| {
+    -> HalfTransform {
+    let occupied: HashSet<usize> = galaxies.iter().map(select).collect();
+    let largest = occupied.iter().max().copied().unwrap_or(0);
+    (0..=largest).scan(0, |stretch, i| {
         let s = *stretch;
-        let is_empty = galaxies.iter().all(|p| select(p) != i);
-        if is_empty { *stretch += factor-1 }
-        Some(s)
+        if !occupied.contains(&i) { *stretch += factor-1 }
+        Some(s + i)
     }).collect()
 }
 
-fn expand(galaxies: Vec<Pos>, stretch_factor: usize) -> Vec<Pos> {
-    let row_stretch = compute_stretch(stretch_factor, &galaxies, |&(r, _)| r);
-    let col_stretch = compute_stretch(stretch_factor, &galaxies, |&(_, c)| c);
-    galaxies.iter().map(|&(r, c)| (r + row_stretch[r], c + col_stretch[c])).collect()
+fn transform_pos((r, c): Pos, (rt, ct): &CoordTransform) -> Pos {
+    (rt[r], ct[c])
 }
 
-fn distance(x: Pos, y: Pos) -> usize {
-    x.0.abs_diff(y.0) + x.1.abs_diff(y.1)
-}
-
-fn total_distance(expanded: &Vec<Pos>) -> usize {
-    let len = expanded.len();
+fn total_distance(galaxies: &Vec<Pos>, stretch_factor: usize) -> usize {
+    let trans = (half_transform(stretch_factor, &galaxies, |&(r, _)| r),
+                 half_transform(stretch_factor, &galaxies, |&(_, c)| c));
+    let len = galaxies.len();
     (0..len)
-        .fold(0, |isum, i|
-              (i+1..len).fold(isum, |jsum, j|
-                              jsum + distance(expanded[i], expanded[j])))
+        .fold(0, |isum, i| {
+            let pi = transform_pos(galaxies[i], &trans);
+            (i+1..len).fold(isum, |jsum, j| {
+                let pj = transform_pos(galaxies[j], &trans);
+                jsum + pi.0.abs_diff(pj.0) + pi.1.abs_diff(pj.1)
+            })
+        })
 }
 
 fn main() {
@@ -69,8 +72,7 @@ fn main() {
         .expect("Could not read file");
 
     let galaxies = read_galaxies(&contents);
-    let expanded_galaxies = expand(galaxies, stretch_factor);
-    let total = total_distance(&expanded_galaxies);
+    let total = total_distance(&galaxies, stretch_factor);
 
     println!("{total}")
 }
