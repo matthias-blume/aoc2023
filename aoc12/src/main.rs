@@ -1,8 +1,9 @@
 use std::env;
 use std::fs;
-use std::sync::mpsc;
 use std::collections::HashMap;
 
+// Splits an input line into the map part (String) and the vector of
+// group lengths.
 fn read_line(line: &str) -> (String, Vec<u64>) {
     match line.split_whitespace().collect::<Vec<_>>().as_slice() {
         [s, nums] => (s.to_string(), nums.split(",").map(|x| x.parse().expect("group length")).collect()),
@@ -10,10 +11,11 @@ fn read_line(line: &str) -> (String, Vec<u64>) {
     }
 }
 
-fn unfold(s: String, v: Vec<u64>) -> (String, Vec<u64>) {
+// Unfolds the input map string and the group vector "factor" times.
+fn unfold(s: String, v: Vec<u64>, factor: u32) -> (String, Vec<u64>) {
     let mut ss = s.to_owned();
     let mut vv = v.to_owned();
-    for _ in 0..4 {
+    for _ in 0..factor-1 {
         ss.push_str("?");
         ss.push_str(&s);
         vv.extend(&v);
@@ -21,6 +23,7 @@ fn unfold(s: String, v: Vec<u64>) -> (String, Vec<u64>) {
     (ss, vv)
 }
 
+// Can the line s be empty on the interval [start, end)?
 fn can_be_empty(s: &[u8], start: usize, end: usize) -> bool {
     for i in start..end {
         if s[i] == b'#' { return false }
@@ -28,53 +31,55 @@ fn can_be_empty(s: &[u8], start: usize, end: usize) -> bool {
     true
 }
 
+// Can a group fit on s on the interval [start, end)?
 fn can_fit_group(s: &[u8], start: usize, end: usize) -> bool {
-    if end > s.len() { return false }
     for i in start..end {
-        if s[i] == b'.' { return false }
+        if s[i] == b'.' { return false }  // would sit on '.'
     }
-    if start > 0 && s[start-1] == b'#' { return false }
-    if end < s.len() && s[end] == b'#' { return false }
+    if start > 0 && s[start-1] == b'#' { return false }  // abuts '#' on left
+    if end < s.len() && s[end] == b'#' { return false }  // abuts '#' on right
     true
 }
 
-fn cnt(s: &[u8], v: &Vec<u64>, i: usize, pos: usize, remaining: usize, memo: &mut HashMap<(usize, usize), u64>) -> u64 {
-    if let Some(&n) = memo.get(&(i, pos)) {
-        return n
-    }
+// Consider v[i..].  Counts in how many ways these groups can fit on s, starting
+// from position pos.
+fn cnt(s: &[u8], v: &Vec<u64>, i: usize, pos: usize, memo: &mut HashMap<(usize, usize), u64>) -> u64 {
+    let remaining = v[i..].iter().sum::<u64>() as usize;
     if i >= v.len() {
-        if can_be_empty(s, pos, s.len()) {
-            memo.insert((i, pos), 1);
-            return 1
-        } else {
-            memo.insert((i, pos), 0);
-            return 0
-        }
+        return if can_be_empty(s, pos, s.len()) { 1 } else { 0 }
     }
     let maxpos = s.len() - remaining - (v.len() - i - 1);
     let group = v[i] as usize;
     let mut n = 0;
     for p in pos..=maxpos {
         if can_be_empty(s, pos, p) && can_fit_group(s, p, p+group) {
-            n += cnt(s, v, i+1, p+group+1, remaining-group, memo)
+            n += cnt_memo(s, v, i+1, p+group+1, memo)
         }
     }
-    memo.insert((i, pos), n);
     n
 }
 
+// Memoized cnt().
+fn cnt_memo(s: &[u8], v: &Vec<u64>, i: usize, pos: usize, memo: &mut HashMap<(usize, usize), u64>) -> u64 {
+    if let Some(&n) = memo.get(&(i, pos)) {
+        n
+    } else {
+        let n = cnt(s, v, i, pos, memo);
+        memo.insert((i, pos), n);
+        n
+    }
+}
+
+// How many ways can the groups in v fit on s?
 fn count(s: &[u8], v: &Vec<u64>) -> u64 {
-    cnt(s, v, 0, 0, (v.iter().sum::<u64>()) as usize, &mut HashMap::new())
+    cnt_memo(s, v, 0, 0, &mut HashMap::new())
 }
 
-fn count_line(line: &str) -> u64 {
+// Read the line, unfold, and count.
+fn count_line(line: &str, factor: u32) -> u64 {
     let (s, v) = read_line(line);
-    let (s, v) = unfold(s, v);
+    let (s, v) = unfold(s, v, factor);
     count(s.as_bytes(), &v)
-}
-
-fn count_lines(lines: &Vec<String>) -> u64 {
-    lines.iter().map(|s| count_line(&s)).sum()
 }
 
 fn main() {
@@ -87,40 +92,15 @@ fn main() {
         Some(arg) => arg,
         _ => panic!("{}: no program name", program),
     };
+    let factor = match args.next() {
+        Some(arg) => arg.parse().expect("unfold factor"),
+        None => 1,
+    };
 
     let contents = fs::read_to_string(file_path)
         .expect("Could not read file");
 
-    let (tx, rx) = mpsc::channel();
-    let mut handles = Vec::new();
-
-    let mut lines: Vec<String> = Vec::new();
-
-    for line in contents.lines() {
-        lines.push(line.to_string());
-        if lines.len() >= 1 {
-            let tlines = lines;
-            let ttx = tx.clone();
-            handles.push(std::thread::spawn(move || {
-                ttx.send(count_lines(&tlines)).unwrap()
-            }));
-            lines = Vec::new();
-        }
-    }
-    let tlines = lines;
-    handles.push(std::thread::spawn(move || {
-        tx.send(count_lines(&tlines)).unwrap()
-    }));
-    
-    let mut n = 0;
-    let mut i = 0;
-    for x in rx {
-        n += x;
-        i += 1;
-        println!("..{i}");
-    }
-
-    handles.into_iter().for_each(|h| h.join().unwrap());
+    let n: u64 = contents.lines().map(|line| count_line(line, factor)).sum();
 
     println!("sum is {n}");
 }
