@@ -6,7 +6,11 @@ use std::collections::HashMap;
 // group lengths.
 fn read_line(line: &str) -> (String, Vec<u64>) {
     match line.split_whitespace().collect::<Vec<_>>().as_slice() {
-        [s, nums] => (s.to_string(), nums.split(",").map(|x| x.parse().expect("group length")).collect()),
+        [s, nums] =>
+            (s.to_string(),
+             nums.split(",")
+             .map(|x| x.parse().expect("group length"))
+             .collect()),
         _ => panic!("bad input line"),
     }
 }
@@ -15,7 +19,7 @@ fn read_line(line: &str) -> (String, Vec<u64>) {
 fn unfold(s: String, v: Vec<u64>, factor: u32) -> (String, Vec<u64>) {
     let mut ss = s.to_owned();
     let mut vv = v.to_owned();
-    for _ in 0..factor-1 {
+    for _ in 0 .. factor - 1 {
         ss.push_str("?");
         ss.push_str(&s);
         vv.extend(&v);
@@ -23,56 +27,56 @@ fn unfold(s: String, v: Vec<u64>, factor: u32) -> (String, Vec<u64>) {
     (ss, vv)
 }
 
-// Can the line s be empty on the interval [start, end)?
-fn can_be_empty(s: &[u8], start: usize, end: usize) -> bool {
-    for i in start..end {
-        if s[i] == b'#' { return false }
-    }
-    true
+// Checks that s does not contain any '#'.
+fn can_be_empty(s: &[u8]) -> bool {
+    s.iter().all(|&c| c != b'#')
 }
 
 // Can a group fit on s on the interval [start, end)?
 fn can_fit_group(s: &[u8], start: usize, end: usize) -> bool {
-    for i in start..end {
-        if s[i] == b'.' { return false }  // would sit on '.'
-    }
-    if start > 0 && s[start-1] == b'#' { return false }  // abuts '#' on left
-    if end < s.len() && s[end] == b'#' { return false }  // abuts '#' on right
-    true
+    (start .. end).all(|i| s[i] != b'.')         // don't sit on '.'
+        && (start == 0 || s[start - 1] != b'#')  // don't abut '#' on left
+        && (end >= s.len() || s[end] != b'#')    // don't abut '#' on right
 }
 
-// Consider v[i..].  Counts in how many ways these groups can fit on s, starting
-// from position pos.
-fn cnt(s: &[u8], v: &Vec<u64>, i: usize, pos: usize, memo: &mut HashMap<(usize, usize), u64>) -> u64 {
-    let remaining = v[i..].iter().sum::<u64>() as usize;
-    if i >= v.len() {
-        return if can_be_empty(s, pos, s.len()) { 1 } else { 0 }
-    }
-    let maxpos = s.len() - remaining - (v.len() - i - 1);
-    let group = v[i] as usize;
-    let mut n = 0;
-    for p in pos..=maxpos {
-        if can_be_empty(s, pos, p) && can_fit_group(s, p, p+group) {
-            n += cnt_memo(s, v, i+1, p+group+1, memo)
+// Counts in how many ways the groupsin v can fit on s,
+// starting from position pos.
+fn cnt(s: &[u8], v: &[u64], pos: usize,
+       memo: &mut HashMap<(usize, usize), u64>) -> u64 {
+    match v {
+        [] => { // No more groups.  Make sure that tail can be empty.
+            return if pos > s.len() || can_be_empty(&s[pos..]) { 1 } else { 0 }
+        },
+        [vfirst, vrest @ ..] => {
+            let g = *vfirst as usize;
+            // Minimum space needed for groups in v, including gaps.
+            let remaining = v.iter().sum::<u64>() as usize + vrest.len();
+            let maxpos = s.len() - remaining;  // max start pos for first group
+            (pos..=maxpos)
+                .map(|p|
+                     if can_be_empty(&s[pos..p]) && can_fit_group(s, p, p + g) {
+                         cnt_memo(s, vrest, p + g + 1, memo)
+                     } else { 0 })
+                .sum()
         }
     }
-    n
 }
 
 // Memoized cnt().
-fn cnt_memo(s: &[u8], v: &Vec<u64>, i: usize, pos: usize, memo: &mut HashMap<(usize, usize), u64>) -> u64 {
-    if let Some(&n) = memo.get(&(i, pos)) {
-        n
-    } else {
-        let n = cnt(s, v, i, pos, memo);
-        memo.insert((i, pos), n);
+fn cnt_memo(s: &[u8], v: &[u64], pos: usize,
+            memo: &mut HashMap<(usize, usize), u64>) -> u64 {
+    let key = (v.len(), pos);
+    if let Some(&n) = memo.get(&key) { n }
+    else {
+        let n = cnt(s, v, pos, memo);
+        memo.insert(key, n);
         n
     }
 }
 
 // How many ways can the groups in v fit on s?
 fn count(s: &[u8], v: &Vec<u64>) -> u64 {
-    cnt_memo(s, v, 0, 0, &mut HashMap::new())
+    cnt_memo(s, &v[..], 0, &mut HashMap::new())
 }
 
 // Read the line, unfold, and count.
