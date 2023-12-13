@@ -50,7 +50,10 @@ fn count_big_steps(initial: &Vec<&String>, transitions: &HashMap<String, String>
     let mut n = 0;
     while !is_big_end_state(&state) {
         state = big_transition(&state, transitions);
-        n += 1
+        n += 1;
+        if n % 1000000 == 0 {
+            eprint!(".");
+        }
     }
     n
 }
