@@ -59,7 +59,7 @@ fn main() {
     };
     let file_path = match args.next() {
         Some(arg) => arg,
-        _ => panic!("{}: no program name", program),
+        _ => panic!("{}: no input file name", program),
     };
     let stretch_factor: usize =
         if let Some(arg) = args.next() {
