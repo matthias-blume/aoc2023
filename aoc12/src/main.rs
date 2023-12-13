@@ -32,30 +32,28 @@ fn can_be_empty(s: &[u8]) -> bool {
     s.iter().all(|&c| c != b'#')
 }
 
-// Can a group fit on s on the interval [start, end)?
-fn can_fit_group(s: &[u8], start: usize, end: usize) -> bool {
-    (start .. end).all(|i| s[i] != b'.')         // don't sit on '.'
-        && (start == 0 || s[start - 1] != b'#')  // don't abut '#' on left
-        && (end >= s.len() || s[end] != b'#')    // don't abut '#' on right
+// Can a group with the given length fit onto the beginning of s?
+fn can_fit_group(s: &[u8], len: usize) -> bool {
+    s[..len].iter().all(|&c| c != b'.')  // don't sit on '.'
+        && s.get(len) != Some(&b'#')      // don't abut '#' on right
 }
 
-// Counts in how many ways the groupsin v can fit on s,
-// starting from position pos.
-fn cnt(s: &[u8], v: &[u64], pos: usize,
-       memo: &mut HashMap<(usize, usize), u64>) -> u64 {
+// Counts in how many ways the groupsin v can fit on s.
+fn cnt(s: &[u8], v: &[u64], memo: &mut HashMap<(usize, usize), u64>) -> u64 {
     match v {
         [] => { // No more groups.  Make sure that tail can be empty.
-            return if pos > s.len() || can_be_empty(&s[pos..]) { 1 } else { 0 }
+            return if can_be_empty(s) { 1 } else { 0 }
         },
         [vfirst, vrest @ ..] => {
             let g = *vfirst as usize;
             // Minimum space needed for groups in v, including gaps.
             let remaining = v.iter().sum::<u64>() as usize + vrest.len();
             let maxpos = s.len() - remaining;  // max start pos for first group
-            (pos..=maxpos)
+            (0..=maxpos)
                 .map(|p|
-                     if can_be_empty(&s[pos..p]) && can_fit_group(s, p, p + g) {
-                         cnt_memo(s, vrest, p + g + 1, memo)
+                     if can_be_empty(&s[..p]) && can_fit_group(&s[p..], g) {
+                         let nextpos = s.len().min(p + g + 1);
+                         cnt_memo(&s[nextpos..], vrest, memo)
                      } else { 0 })
                 .sum()
         }
@@ -63,12 +61,11 @@ fn cnt(s: &[u8], v: &[u64], pos: usize,
 }
 
 // Memoized cnt().
-fn cnt_memo(s: &[u8], v: &[u64], pos: usize,
-            memo: &mut HashMap<(usize, usize), u64>) -> u64 {
-    let key = (v.len(), pos);
+fn cnt_memo(s: &[u8], v: &[u64], memo: &mut HashMap<(usize, usize), u64>) -> u64 {
+    let key = (v.len(), s.len());
     if let Some(&n) = memo.get(&key) { n }
     else {
-        let n = cnt(s, v, pos, memo);
+        let n = cnt(s, v, memo);
         memo.insert(key, n);
         n
     }
@@ -76,7 +73,7 @@ fn cnt_memo(s: &[u8], v: &[u64], pos: usize,
 
 // How many ways can the groups in v fit on s?
 fn count(s: &[u8], v: &Vec<u64>) -> u64 {
-    cnt_memo(s, &v[..], 0, &mut HashMap::new())
+    cnt_memo(s, &v[..], &mut HashMap::new())
 }
 
 // Read the line, unfold, and count.
