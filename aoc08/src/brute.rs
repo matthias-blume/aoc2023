@@ -83,7 +83,7 @@ fn main() {
     };
     let file_path = match args.next() {
         Some(arg) => arg,
-        _ => panic!("{}: no program name", program),
+        _ => panic!("{}: no input file name", program),
     };
 
     let contents = fs::read_to_string(file_path)

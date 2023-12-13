@@ -2,7 +2,7 @@ use std::env;
 use std::fs;
 use std::collections::HashMap;
 
-// Splits an input line into the map part (String) and the vector of
+// Splits input line into the map part (a String) and the vector of
 // group lengths.
 fn read_line(line: &str) -> (String, Vec<u64>) {
     match line.split_whitespace().collect::<Vec<_>>().as_slice() {
@@ -38,7 +38,8 @@ fn can_fit_group(s: &[u8], len: usize) -> bool {
         && s.get(len) != Some(&b'#')      // don't abut '#' on right
 }
 
-// Counts in how many ways the groupsin v can fit on s.
+// Counts in how many ways the groups in v can fit onto s, using the
+// memoized version for recursive calls.
 fn cnt(s: &[u8], v: &[u64], memo: &mut HashMap<(usize, usize), u64>) -> u64 {
     match v {
         [] => { // No more groups.  Make sure that tail can be empty.
@@ -71,7 +72,7 @@ fn cnt_memo(s: &[u8], v: &[u64], memo: &mut HashMap<(usize, usize), u64>) -> u64
     }
 }
 
-// How many ways can the groups in v fit on s?
+// Counts in how many ways the groups in v can fit onto s.
 fn count(s: &[u8], v: &Vec<u64>) -> u64 {
     cnt_memo(s, &v[..], &mut HashMap::new())
 }
@@ -91,7 +92,7 @@ fn main() {
     };
     let file_path = match args.next() {
         Some(arg) => arg,
-        _ => panic!("{}: no program name", program),
+        _ => panic!("{}: no input file name", program),
     };
     let factor = match args.next() {
         Some(arg) => arg.parse().expect("unfold factor"),
