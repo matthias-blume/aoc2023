@@ -5,51 +5,47 @@ type Row = Vec<bool>;
 type Pattern = Vec<Row>;
 type Coords = (usize, usize);
 
-// Identity function on coordinates represents "horizontal".
-// To get vertical behavior, use function that swaps coordinates.
-type Direction = dyn Fn(Coords) -> Coords;
+enum Direction { Hor, Vert }
+use crate::Direction::*;
 
 // Reads pattern dimensions (assuming that all rows are of the same size).
-fn dims(p: &Pattern) -> Coords {
+fn dims(p: &Pattern, d: &Direction) -> Coords {
     let r = p.len();
-    (r, if r > 0 { p[0].len() } else { 0 })
+    let c = if r > 0 { p[0].len() } else { 0 };
+    match d { Hor => (r, c), Vert => (c, r) }
 }
 
 // Access the given coordinates in a pattern, considering the direction.
-fn access(p: &Pattern, coords: Coords, direction: &Direction) -> bool {
-    let (r, c) = direction(coords);
-    p[r][c]
+fn access(p: &Pattern, (i, j): Coords, d: &Direction) -> bool {
+    match d { Hor => p[i][j], Vert => p[j][i] }
 }
 
 // Calculates the number of defects ("smudges") that account for
 // a mirroring line at m (= row or column, depending on direction).
-fn mirror_defects(p: &Pattern, m: usize, direction: &Direction) -> usize {
-    let (xsz, ysz) = direction(dims(p));
+fn mirror_defects(p: &Pattern, m: usize, d: &Direction) -> usize {
+    let (xsz, ysz) = dims(p, d);
     let m2 = 2 * m;
     let start = m2.max(xsz) - xsz;
     (start..m)
         .map(|i|
              (0..ysz)
-             .filter(|&j| access(p, (i, j), direction) !=
-                     access(p, (m2 - i - 1, j), direction))
+             .filter(|&j| access(p, (i, j), d) != access(p, (m2 - i - 1, j), d))
              .count())
         .sum()
 }
 
 // Scores a mirror line at m.  The score is m if the actual number of smudges
 // matches the expected number.  Otherwise the score is 0.
-fn mirror_score(p: &Pattern, m: usize, defects: usize, direction: &Direction) -> usize {
-    if mirror_defects(p, m, direction) == defects { m } else { 0 }
+fn mirror_score(p: &Pattern, m: usize, defects: usize, d: &Direction) -> usize {
+    if mirror_defects(p, m, d) == defects { m } else { 0 }
 }
 
 // Sum of scores of all possible reflection lines, given the expected number
 // of defects (smudges).
 fn reflection_score(p: &Pattern, defects: usize) -> usize {
-    let (nrows, ncols) = dims(p);
-    let hor: &Direction = &|d| d;
-    let vert: &Direction = &|(r, c)| (c, r);
-    100 * (1..nrows).map(|i| mirror_score(p, i, defects, hor)).sum::<usize>()
-        + (1..ncols).map(|j| mirror_score(p, j, defects, vert)).sum::<usize>()
+    let (nrows, ncols) = dims(p, &Hor);
+    100 * (1..nrows).map(|i| mirror_score(p, i, defects, &Hor)).sum::<usize>()
+        + (1..ncols).map(|j| mirror_score(p, j, defects, &Vert)).sum::<usize>()
 }
 
 // Reads a Row.  '#' is true, '.' (and everything else) is false.
