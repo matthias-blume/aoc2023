@@ -1,64 +1,45 @@
 use std::env;
 use std::fs;
 
-#[derive(Eq, PartialEq)]
-enum Spot {
-    Ash,
-    Rock,
-}
-
-use crate::Spot::*;
-
-type Row = Vec<Spot>;
+type Row = Vec<bool>;
 type Pattern = Vec<Row>;
+type Coords = (usize, usize);
+type Direction = dyn Fn(Coords) -> Coords;
 
-fn row_defects(p: &Pattern, i: usize, j: usize) -> usize {
-    let nrows = p.len();
-    if j >= nrows { return 0 }
-    let ncols = p[0].len();
-    (0..ncols).filter(|&c| p[i][c] != p[j][c]).count()
+fn dims(p: &Pattern) -> Coords { (p.len(), p[0].len()) }
+
+fn access(p: &Pattern, coords: Coords, direction: &Direction) -> bool {
+    let (r, c) = direction(coords);
+    p[r][c]
 }
 
-fn col_defects(p: &Pattern, i: usize, j: usize) -> usize {
-    let nrows = p.len();
-    let ncols = p[0].len();
-    if j >= ncols { return 0 }
-    (0..nrows).filter(|&r| p[r][i] != p[r][j]).count()
+fn mirror_defects(p: &Pattern, m: usize, direction: &Direction) -> usize {
+    let (xsz, ysz) = direction(dims(p));
+    let m2 = 2 * m;
+    let start = m2.max(xsz) - xsz;
+    (start..m)
+        .map(|i|
+             (0..ysz)
+             .filter(|&j| access(p, (i, j), direction) !=
+                     access(p, (m2 - i - 1, j), direction))
+             .count())
+        .sum()
 }
 
-fn hor_mirror_defects(p: &Pattern, mrow: usize) -> usize {
-    let mrow2 = 2 * mrow;
-    (0..mrow).map(|i| row_defects(p, i, mrow2 - i - 1)).sum()
+fn mirror_score(p: &Pattern, m: usize, defects: usize, direction: &Direction) -> usize {
+    if mirror_defects(p, m, direction) == defects { m } else { 0 }
 }
 
-fn vert_mirror_defects(p: &Pattern, mcol: usize) -> usize {
-    let mcol2 = 2 * mcol;
-    (0..mcol).map(|j| col_defects(p, j, mcol2 - j - 1)).sum()
-}
-
-fn find_reflection(p: &Pattern, defects: usize) -> usize {
-    let nrows = p.len();
-    let ncols = p[0].len();
-    let mut total = 0;
-    for i in 0..nrows {
-        if hor_mirror_defects(p, i) == defects {
-            total += 100 * i
-        }
-    }
-    for j in 0..ncols {
-        if vert_mirror_defects(p, j) == defects {
-            total += j
-        }
-    }
-    total
+fn reflection_score(p: &Pattern, defects: usize) -> usize {
+    let (nrows, ncols) = dims(p);
+    let hor: &Direction = &|d| d;
+    let vert: &Direction = &|(r, c)| (c, r);
+    100 * (1..nrows).map(|i| mirror_score(p, i, defects, hor)).sum::<usize>()
+        + (1..ncols).map(|j| mirror_score(p, j, defects, vert)).sum::<usize>()
 }
 
 fn read_row(line: &str) -> Row {
-    line.chars().map(|c| match c {
-        '#' => Rock,
-        '.' => Ash,
-        _ => panic!("bad spot"),
-    }).collect()
+    line.chars().map(|c| c == '#').collect()
 }
 
 fn main() {
@@ -84,7 +65,7 @@ fn main() {
 
     for line in contents.lines() {
         if line.len() == 0 {
-            total += find_reflection(&pattern, defects);
+            total += reflection_score(&pattern, defects);
             pattern = Vec::new();
         } else {
             pattern.push(read_row(line))
@@ -92,7 +73,7 @@ fn main() {
     }
 
     if pattern.len() > 0 {
-        total += find_reflection(&pattern, defects);
+        total += reflection_score(&pattern, defects);
     }
     
     println!("{total}");
