@@ -1,9 +1,8 @@
 use std::env;
 use std::fs;
-use std::iter;
 use std::collections::HashMap;
 
-#[derive(Copy, Clone, Eq, PartialEq)]
+#[derive(PartialEq, Eq, Clone, Copy)]
 enum Item {
     Nothing,
     Square,
@@ -11,21 +10,15 @@ enum Item {
 }
 use crate::Item::*;
 
-#[derive(Copy, Clone, Eq, PartialEq)]
+#[derive(Copy, Clone)]
 enum TiltAxis { Hor, Vert }
 use crate::TiltAxis::*;
 
-#[derive(Copy, Clone, Eq, PartialEq)]
+#[derive(Copy, Clone)]
 enum Direction { Up, Down }
 use crate::Direction::*;
 
-impl Direction {
-    fn increment(self: Self) -> i32 {
-        match self { Down => 1, Up => -1 }
-    }
-}
-
-#[derive(Hash, Eq, PartialEq)]
+#[derive(PartialEq, Eq, Hash)]
 struct RowSummary(u8, Vec<u8>);
 
 impl RowSummary {
@@ -37,116 +30,100 @@ impl RowSummary {
     }
 }
 
-struct Board(Vec<Vec<Item>>);
-
-struct FreePos(Vec<i32>);
-
-impl FreePos {
-    fn set_square_at(self: &mut Self, i: usize, j: usize, direction: Direction) {
-        self.0[j] = i as i32 + direction.increment()
-    }
-
-    fn slide_round_at(self: &mut Self, j: usize, direction: Direction) -> i32 {
-        let new_i = self.0[j];
-        self.0[j] = new_i + direction.increment();
-        new_i
-    }
-}
-
-#[derive(Hash, Eq, PartialEq)]
+#[derive(PartialEq, Eq, Hash)]
 struct Summary(Vec<RowSummary>);
 
+struct Board {
+    nrows: usize,
+    ncols: usize,
+    items: Vec<Vec<Item>>,
+}
+
 impl Board {
-    fn dims(self: &Self) -> (usize, usize) {
-        let nrows = self.0.len();
-        (nrows, if nrows == 0 { 0 } else { self.0[0].len() })
-    }
-
-    fn freepos(self: &Self, axis: TiltAxis, direction: Direction) -> FreePos {
-        let (nrows, ncols) = self.dims();
-        let (sz, end) = match axis { Hor => (ncols, nrows), Vert => (nrows, ncols) };
-        let init = match direction { Down => 0, Up => end as i32 - 1 };
-        FreePos(iter::repeat(init).take(sz).collect())
-    }
-
-    fn at<'a>(self: &'a mut Self, i: usize, j: usize, axis: TiltAxis) -> &'a mut Item {
-        match axis { Hor => &mut self.0[i][j], Vert => &mut self.0[j][i] }
-    }
-
-    fn tilt(self: &mut Self, axis: TiltAxis, direction: Direction) {
-        let (nrows, ncols) = self.dims();
-        let mut freepos = self.freepos(axis, direction);
-        let (iend, jend) = match axis { Hor => (nrows, ncols), Vert => (ncols, nrows) };
-        let mut j_iteration = |i|
-            for j in 0..jend {
-                match self.at(i, j, axis) {
-                    Nothing => (),
-                    Square => freepos.set_square_at(i, j, direction),
-                    Round => {
-                        let new_i = freepos.slide_round_at(j, direction);
-                        *self.at(i, j, axis) = Nothing;
-                        *self.at(new_i as usize, j, axis) = Round
-                    }
-                }
-            };
-        match direction {
-            Down => for i in 0..iend { j_iteration(i) },
-            Up => for i in (0..iend).rev() { j_iteration(i) },
+    fn new(items: Vec<Vec<Item>>) -> Board {
+        Board {
+            nrows: items.len(),
+            ncols: if items.len() > 0 { items[0].len() } else { 0 },
+            items: items,
         }
     }
 
-    fn cycle(self: &mut Self) {
+    fn at<'a>(self: &'a mut Self, i: usize, j: usize, axis: TiltAxis) -> &'a mut Item {
+        match axis { Hor => &mut self.items[i][j], Vert => &mut self.items[j][i] }
+    }
+
+    fn tilt<'a>(self: &'a mut Self, axis: TiltAxis, direction: Direction) -> &'a mut Self {
+        let iend = match axis { Hor => self.nrows, Vert => self.ncols };
+        let jend = match axis { Hor => self.ncols, Vert => self.nrows };
+        for j in 0..jend {
+            let mut free = match direction { Down => 0, Up => iend as i32 - 1 };
+            let mut adjust_position = |i, j, increment| match self.at(i, j, axis) {
+                Nothing => (),
+                Square => free = i as i32 + increment,
+                Round => {
+                    let new_i = free;
+                    free = new_i + increment;
+                    *self.at(i, j, axis) = Nothing;
+                    *self.at(new_i as usize, j, axis) = Round;
+                },
+            };
+            match direction {
+                Down => for i in 0..iend { adjust_position(i, j, 1); },
+                Up => for i in (0..iend).rev() { adjust_position(i, j, -1); },
+            }
+        }
+        self
+    }
+    
+    fn cycle<'a>(self: &'a mut Self) -> &'a mut Self {
         self.tilt(Hor, Down); // north
         self.tilt(Vert, Down); // west
         self.tilt(Hor, Up); // south
-        self.tilt(Vert, Up); // east
+        self.tilt(Vert, Up) // east
     }
 
     fn weight(self: &Self) -> usize {
-        let nrows = self.0.len();
-        self.0
+        self.items
             .iter()
             .enumerate()
-            .map(|(r, row)| (nrows - r) * row.iter().filter(|&item| item == &Round).count())
+            .map(|(r, row)|
+                 (self.nrows - r)
+                 * row.iter().filter(|&item| item == &Round).count())
             .sum()
     }
 
     fn summarize(self: &Self) -> Summary {
-        Summary(self.0.iter().enumerate()
+        Summary(self.items.iter().enumerate()
                 .filter_map(|(r, row)| RowSummary::for_row(r as u8, row))
                 .collect())
     }
 
-    fn ncycle(self: &mut Self, n: u64) {
+    fn ncycle<'a>(self: &'a mut Self, n: u64) -> &'a mut Self {
         let mut history = HashMap::new();
-        for round in 0..n {
+        for i in 0..n {
             let summary = self.summarize();
-            if let Some(previous_round) = history.get(&summary) {
-                let cycle_length = round - previous_round;
-                let remaining = (n-previous_round) % cycle_length;
-                for _ in 0..remaining {
-                    self.cycle();
-                }
-                return
+            if let Some(prev_i) = history.get(&summary) {
+                let remaining = (n - prev_i) % (i - prev_i);
+                for _ in 0..remaining { self.cycle(); }
+                return self
             } else {
-                history.insert(summary, round);
-                self.cycle()
+                history.insert(summary, i);
+                self.cycle();
             }
         }
+        self
     }
 }
 
 fn read_row(line: &str) -> Vec<Item> {
-    let mut v = Vec::new();
-    for c in line.chars() {
-        match c {
-            '.' => v.push(Nothing),
-            '#' => v.push(Square),
-            'O' => v.push(Round),
+    line.chars()
+        .map(|c| match c {
+            '.' => Nothing,
+            '#' => Square,
+            'O' => Round,
             _ => panic!("bad item"),
-        }
-    }
-    v
+        })
+        .collect()
 }
 
 fn main() {
@@ -168,14 +145,8 @@ fn main() {
         v.push(read_row(line))
     }
 
-    let mut board = Board(v.clone());
-    board.tilt(Hor, Down);
-    let total = board.weight();
-    println!("part1: {total}");
-
-    let mut board = Board(v);
-    board.ncycle(1000000000);
-    let total = board.weight();
+    let part1 = Board::new(v.clone()).tilt(Hor, Down).weight();
+    let part2 = Board::new(v).ncycle(1000000000).weight();
     
-    println!("part2: {total}");
+    println!("part1: {part1}, part2: {part2}");
 }
