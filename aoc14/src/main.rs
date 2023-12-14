@@ -1,6 +1,7 @@
 use std::env;
 use std::fs;
 use std::collections::HashMap;
+use num;
 
 #[derive(PartialEq, Eq, Clone, Copy)]
 enum Item {
@@ -52,34 +53,37 @@ impl Board {
         match axis { Hor => &mut self.items[i][j], Vert => &mut self.items[j][i] }
     }
 
-    fn tilt<'a>(self: &'a mut Self, axis: TiltAxis, direction: Direction) -> &'a mut Self {
+    fn tilt(mut self: Self, axis: TiltAxis, direction: Direction) -> Self {
         let iend = match axis { Hor => self.nrows, Vert => self.ncols };
         let jend = match axis { Hor => self.ncols, Vert => self.nrows };
-        for j in 0..jend {
-            let mut free = match direction { Down => 0, Up => iend as i32 - 1 };
-            let mut adjust_position = |i, j, increment| match self.at(i, j, axis) {
-                Nothing => (),
-                Square => free = i as i32 + increment,
-                Round => {
-                    let new_i = free;
-                    free = new_i + increment;
-                    *self.at(i, j, axis) = Nothing;
-                    *self.at(new_i as usize, j, axis) = Round;
-                },
-            };
+        let (istart, istop, increment) =
             match direction {
-                Down => for i in 0..iend { adjust_position(i, j, 1); },
-                Up => for i in (0..iend).rev() { adjust_position(i, j, -1); },
+                Down => (0, iend as i32 - 1, 1),
+                Up => (iend as i32 - 1, 0, -1),
+            };
+        for j in 0..jend {
+            let mut free = istart;
+            for i in num::range_step_inclusive(istart, istop, increment) {
+                match self.at(i as usize, j, axis) {
+                    Nothing => (),
+                    Square => free = i + increment,
+                    Round => {
+                        let new_i = free;
+                        free = new_i + increment;
+                        *self.at(i as usize, j, axis) = Nothing;
+                        *self.at(new_i as usize, j, axis) = Round;
+                    },
+                }
             }
         }
         self
     }
     
-    fn cycle<'a>(self: &'a mut Self) -> &'a mut Self {
-        self.tilt(Hor, Down); // north
-        self.tilt(Vert, Down); // west
-        self.tilt(Hor, Up); // south
-        self.tilt(Vert, Up) // east
+    fn cycle(self: Self) -> Self {
+        self.tilt(Hor, Down) // north
+            .tilt(Vert, Down) // west
+            .tilt(Hor, Up) // south
+            .tilt(Vert, Up) // east
     }
 
     fn weight(self: &Self) -> usize {
@@ -98,17 +102,17 @@ impl Board {
                 .collect())
     }
 
-    fn ncycle<'a>(self: &'a mut Self, n: u64) -> &'a mut Self {
+    fn ncycle(mut self: Self, n: u64) -> Self {
         let mut history = HashMap::new();
         for i in 0..n {
             let summary = self.summarize();
             if let Some(prev_i) = history.get(&summary) {
                 let remaining = (n - prev_i) % (i - prev_i);
-                for _ in 0..remaining { self.cycle(); }
+                for _ in 0..remaining { self = self.cycle(); }
                 return self
             } else {
                 history.insert(summary, i);
-                self.cycle();
+                self = self.cycle();
             }
         }
         self
