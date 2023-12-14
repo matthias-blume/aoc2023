@@ -14,30 +14,49 @@ struct RangeMap {
     dst_start: u64,
 }
 
-// Build valid range from start and end point (if possible).
-fn start_end_range(s: u64, e: u64) -> Option<Range> {
-    if e > s { Some(Range(s, e - s)) } else { None }
-}
+impl Range {
+    // Build valid range from start and end point (if possible).
+    fn start_end(s: u64, e: u64) -> Option<Self> {
+        if e > s { Some(Range(s, e - s)) } else { None }
+    }
 
-// Left overhang (non-empty portion of x that lies outside to the left of y).
-fn range_left_overhang(Range(xs, xl): Range, Range(ys, _): Range) -> Option<Range> {
-    start_end_range(xs, min(ys, xs + xl))
-}
+    // Left overhang (non-empty portion of x that lies outside to the left of y).
+    fn left_overhang(self: Self, Range(ys, _): Range) -> Option<Range> {
+        Self::start_end(self.0, min(ys, self.0 + self.1))
+    }
 
-// Intersection of x and y (non-empty portion that lies within both).
-fn range_intersection(Range(xs, xl): Range, Range(ys, yl): Range) -> Option<Range> {
-    start_end_range(max(xs, ys), min(xs + xl, ys + yl))
-}
+    // Intersection of x and y (non-empty portion that lies within both).
+    fn intersection(self: Self, Range(ys, yl): Range) -> Option<Range> {
+        Range::start_end(max(self.0, ys), min(self.0 + self.1, ys + yl))
+    }
 
-// Right overhang (non-empty portion of x that lies outside to the right of y).
-fn range_right_overhang(Range(xs, xl): Range, Range(ys, yl): Range) -> Option<Range> {
-    start_end_range(max(xs, ys + yl), xs + xl)
-}
+    // Right overhang (non-empty portion of x that lies outside to the right of y).
+    fn right_overhang(self: Self, Range(ys, yl): Range) -> Option<Range> {
+        Range::start_end(max(self.0, ys + yl), self.0 + self.1)
+    }
 
-// Apply a RangeMap to a single Range, assuming that it lies fully within the
-// source range.
-fn map_single_range(Range(s, l): Range, m: &RangeMap) -> Range {
-    Range(s + m.dst_start - m.src.0, l)
+    // Apply a single RangeMap to this range, assuming that it lies fully
+    // within the source range of the RangeMap.
+    fn single_map(self: Self, m: &RangeMap) -> Range {
+        Range(self.0 + m.dst_start - m.src.0, self.1)
+    }
+
+    // Apply full mapping to a single Range.
+    //
+    // The mapping can split a single range into multiple ranges depending on
+    // how it intersects with the various source ranges within the mapping.
+    //
+    // The mapping is sorted by increasing source ranges.
+    fn map_into(self: Self, sorted_mapping: &Vec<RangeMap>, dest: &mut Vec<Range>) {
+        let mut x: Range = self;
+        for rm in sorted_mapping {
+            if let Some(l) = x.left_overhang(rm.src) { dest.push(l) }
+            if let Some(m) = x.intersection(rm.src) { dest.push(m.single_map(&rm)) }
+            if let Some(r) = x.right_overhang(rm.src) { x = r }
+            else { return }
+        }
+        dest.push(x)
+    }
 }
 
 // Reads seed values in pairs (start, len).
@@ -51,29 +70,13 @@ fn seeds(spec: &[&str]) -> Vec<Range> {
     v
 }
 
-// Apply full mapping to a single Range.
-//
-// The mapping can split a single range into multiple ranges depending on
-// how it intersects with the various source ranges within the mapping.
-//
-// The mapping is sorted by increasing source ranges.
-fn map_range_into(range: Range, sorted_mapping: &Vec<RangeMap>, dest: &mut Vec<Range>) {
-    let mut x: Range = range;
-    for rm in sorted_mapping {
-        if let Some(l) = range_left_overhang(x, rm.src) { dest.push(l) }
-        if let Some(m) = range_intersection(x, rm.src) { dest.push(map_single_range(m, &rm)) }
-        if let Some(r) = range_right_overhang(x, rm.src) { x = r }
-        else { return }
-    }
-    dest.push(x)
-}
-
 // Sorts the mapping and then applies it to all given ranges, resulting in
 // a new list of ranges.
-fn apply_mapping(cur: Vec<Range>, mapping: &mut Vec<RangeMap>) -> Vec<Range> {
-    mapping.sort_by(|a, b| a.src.0.cmp(&b.src.0));
+fn apply_mapping(cur: Vec<Range>, mapping: Vec<RangeMap>) -> Vec<Range> {
+    let mut sorted_mapping = mapping;
+    sorted_mapping.sort_by(|a, b| a.src.0.cmp(&b.src.0));
     let mut result = Vec::new();
-    cur.iter().for_each(|r| map_range_into(*r, mapping, &mut result));
+    cur.iter().for_each(|&r| r.map_into(&sorted_mapping, &mut result));
     result
 }
 
@@ -108,7 +111,7 @@ fn main() {
                     cur = seeds(seeds_strings)
                 },
                 [map_type, "map:"] => {
-                    cur = apply_mapping(cur, &mut mapping);
+                    cur = apply_mapping(cur, mapping);
                     mapping = Vec::new();
                     kind = changed_kind(kind, map_type)
                 },
@@ -120,7 +123,7 @@ fn main() {
                 _ => panic!("invalid input"),
             }
         }
-        cur = apply_mapping(cur, &mut mapping);
+        cur = apply_mapping(cur, mapping);
         let smallest = cur.iter().map(|r| r.0).min().unwrap();
         println!("Lowest {kind} is {smallest}");
     } else {
