@@ -14,7 +14,7 @@ struct Lens {
 
 enum Instruction<'a> {
     AddLens{ label: &'a str, strength: usize, hash: usize },
-    DeleteLens{ label: &'a str, hash: usize },
+    RemoveLens{ label: &'a str, hash: usize },
 }
 use crate::Instruction::*;
 
@@ -30,7 +30,7 @@ impl<'a> Instruction<'a> {
                     panic!("bad instruction: '{}'", input)
                 }
                 let label = &input[0..input.len()-1];
-                DeleteLens{ label, hash: hash::ascii(label) }
+                RemoveLens{ label, hash: hash::ascii(label) }
             }
         }
     }
@@ -77,7 +77,7 @@ impl Boxes {
         match Instruction::from(ins) {
             AddLens{ label, strength, hash } =>
                 boxes[hash].insert_lens(label, strength),
-            DeleteLens{ label, hash } =>
+            RemoveLens{ label, hash } =>
                 boxes[hash].remove_lens(label),
         }
     }
