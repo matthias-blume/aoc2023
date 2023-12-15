@@ -7,8 +7,8 @@ mod hash {
     }
 }
 
-struct Lens {
-    label: String,
+struct Lens<'a> {
+    label: &'a str,
     strength: usize,
 }
 
@@ -36,12 +36,12 @@ impl<'a> Instruction<'a> {
     }
 }
 
-struct Box{
+struct Box<'a> {
     n: usize,  // box number
-    lenses: Vec<Lens>,
+    lenses: Vec<Lens<'a>>,
 }
 
-impl Box {
+impl<'a> Box<'a> {
     fn lens_position(self: &Self, label: &str) -> Option<usize> {
         self.lenses.iter().position(|lens| lens.label == label)
     }
@@ -52,8 +52,8 @@ impl Box {
         }
     }
 
-    fn insert_lens(self: &mut Self, label: &str, strength: usize) {
-        let lens = Lens{ label: label.to_string(), strength };
+    fn insert_lens(self: &mut Self, label: &'a str, strength: usize) {
+        let lens = Lens{ label, strength };
         if let Some(i) = self.lens_position(label) {
             self.lenses[i] = lens;
         } else {
@@ -69,10 +69,10 @@ impl Box {
     }
 }
 
-struct Boxes(Vec<Box>);
+struct Boxes<'a>(Vec<Box<'a>>);
 
-impl Boxes {
-    fn apply_instruction(self: &mut Self, ins: &str) {
+impl<'a> Boxes<'a> {
+    fn apply_instruction(self: &mut Self, ins: &'a str) {
         let Boxes(ref mut boxes) = self;
         match Instruction::from(ins) {
             AddLens{ label, strength, hash } =>
@@ -82,7 +82,7 @@ impl Boxes {
         }
     }
 
-    fn apply_line(self: &mut Self, line: &str) {
+    fn apply_line(self: &mut Self, line: &'a str) {
         line.split(",").for_each(|ins| self.apply_instruction(ins))
     }
 
