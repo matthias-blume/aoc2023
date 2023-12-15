@@ -3,11 +3,11 @@ use std::fs;
 
 struct Lens {
     label: String,
-    strength: u8,
+    strength: usize,
 }
 
 struct Box{
-    n: u8,  // box number
+    n: usize,  // box number
     lenses: Vec<Lens>,
 }
 
@@ -32,7 +32,7 @@ impl Box {
         }
     }
 
-    fn insert_lens(self: &mut Self, label: &str, strength: u8) {
+    fn insert_lens(self: &mut Self, label: &str, strength: usize) {
         let lens = Lens{ label: label.to_string(), strength };
         if let Some(i) = self.lens_position(label) {
             self.lenses[i] = lens;
@@ -42,10 +42,9 @@ impl Box {
     }
 
     fn strength(self: &Self) -> usize {
-        (self.n as usize + 1) *
+        (self.n + 1) *
             self.lenses.iter().enumerate()
-                .map(|(position, lens)|
-                     (position + 1) * (lens.strength as usize))
+                .map(|(position, lens)| (position + 1) * lens.strength)
                 .sum::<usize>()
     }
 }
@@ -56,7 +55,7 @@ impl Boxes {
         match ins.split("=").collect::<Vec<_>>().as_slice() {
             [label, strength] => {
                 let h = ascii_hash(label);
-                let s = strength.parse::<u8>().expect("lens strength");
+                let s = strength.parse().expect("lens strength");
                 boxes[h].insert_lens(label, s)
             },
             _ => {
