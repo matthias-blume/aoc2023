@@ -24,23 +24,25 @@ impl Direction {
     }
 }
 
+
 #[derive(Copy, Clone)]
-enum Part {
-    One,
-    Two,
+struct Limits {
+    at_least: Option<usize>,
+    at_most: Option<usize>,
 }
 
-impl Part {
-    fn permits(self, old: Direction, new: Direction, dsteps: usize) -> bool {
-        match self {
-            Part::One =>
-                old != new || dsteps < 3,
-            Part::Two =>
-                (old != new || dsteps < 10) && (old == new || dsteps >= 4),
+impl Limits {
+    fn permit(self, old: Direction, new: Direction, dsteps: usize) -> bool {
+        if let Some(at_least) = self.at_least {
+            if old != new && dsteps < at_least { return false };
         }
+        if let Some(at_most) = self.at_most {
+            if old == new && dsteps >= at_most { return false };
+        }
+        true
     }
 }
-
+            
 #[derive(PartialEq, Eq, Hash, Copy, Clone, PartialOrd, Ord)]
 struct State {
     i: usize,
@@ -49,11 +51,11 @@ struct State {
 }
 
 impl State {
-    fn next(&self, d: Direction, board: &Board, part: Part) -> Option<Self> {
+    fn next(&self, d: Direction, board: &Board, limits: Limits) -> Option<Self> {
         let dinfo =
             if let Some((old_d, dsteps)) = self.dinfo {
                 if old_d == d.reverse() { return None }
-                if !part.permits(old_d, d, dsteps) { return None }
+                if !limits.permit(old_d, d, dsteps) { return None }
                 let dsteps = if old_d == d { dsteps + 1 } else { 1 };
                 Some((d, dsteps))
             } else {
@@ -99,11 +101,12 @@ impl Board {
         (state, self.losses[state.i][state.j])
     }
     
-    fn successors(&'_ self, state: State, part: Part) -> impl IntoIterator<Item = (State, u64)> + '_ {
+    fn successors(&'_ self, state: State, limits: Limits)
+                  -> impl IntoIterator<Item = (State, u64)> + '_ {
         vec![Up, Down, Left, Right]
             .into_iter()
             .filter_map(
-                move |d| state.next(d, self, part)
+                move |d| state.next(d, self, limits)
                     .map(|state| self.with_loss(state)))
     }
 
@@ -119,7 +122,7 @@ struct WorkItem {
 }
 
 // Dijkstra using a BinaryHeap in lieu of a proper priority queue.
-fn find_best(board: &Board, part: Part) -> u64 {
+fn find_best(board: &Board, limits: Limits) -> u64 {
     let mut best_so_far = HashMap::new();
     let mut heap = BinaryHeap::new();
     let initial = State{ i: 0, j: 0, dinfo: None };
@@ -131,7 +134,7 @@ fn find_best(board: &Board, part: Part) -> u64 {
             return cur_best
         }
         if cur_best < cur.best { continue }; // because not a real PQ
-        for (new_state, loss) in board.successors(cur.state, part) {
+        for (new_state, loss) in board.successors(cur.state, limits) {
             let &orig = best_so_far.get(&new_state).unwrap_or(&std::u64::MAX);
             let new = cur_best + loss;
             if new < orig {
@@ -158,8 +161,10 @@ fn main() {
         .expect("Could not read file");
 
     let board = Board::from(&contents);
-    let part1 = find_best(&board, Part::One);
-    let part2 = find_best(&board, Part::Two);
+    let part1 =
+        find_best(&board, Limits{ at_least: None, at_most: Some(3) });
+    let part2 =
+        find_best(&board, Limits{ at_least: Some(4), at_most: Some(10) });
 
     println!("part 1: {part1}, part2 : {part2}");
 }
