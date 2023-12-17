@@ -49,11 +49,11 @@ impl Board {
         }
     }
 
-    fn at<'a>(self: &'a mut Self, i: usize, j: usize, axis: TiltAxis) -> &'a mut Item {
+    fn at<'a>(&'a mut self, i: usize, j: usize, axis: TiltAxis) -> &'a mut Item {
         match axis { Hor => &mut self.items[i][j], Vert => &mut self.items[j][i] }
     }
 
-    fn tilt(mut self: Self, axis: TiltAxis, direction: Direction) -> Self {
+    fn tilt(mut self, axis: TiltAxis, direction: Direction) -> Self {
         let iend = match axis { Hor => self.nrows, Vert => self.ncols };
         let jend = match axis { Hor => self.ncols, Vert => self.nrows };
         let (istart, istop, increment) =
@@ -79,14 +79,14 @@ impl Board {
         self
     }
     
-    fn cycle(self: Self) -> Self {
+    fn cycle(self) -> Self {
         self.tilt(Hor, Down) // north
             .tilt(Vert, Down) // west
             .tilt(Hor, Up) // south
             .tilt(Vert, Up) // east
     }
 
-    fn weight(self: &Self) -> usize {
+    fn weight(&self) -> usize {
         self.items
             .iter()
             .enumerate()
@@ -96,13 +96,13 @@ impl Board {
             .sum()
     }
 
-    fn summarize(self: &Self) -> Summary {
+    fn summarize(&self) -> Summary {
         Summary(self.items.iter().enumerate()
                 .filter_map(|(r, row)| RowSummary::for_row(r as u8, row))
                 .collect())
     }
 
-    fn ncycle(mut self: Self, n: u64) -> Self {
+    fn ncycle(mut self, n: u64) -> Self {
         let mut history = HashMap::new();
         for i in 0..n {
             let summary = self.summarize();

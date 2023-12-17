@@ -21,23 +21,23 @@ impl Range {
     }
 
     // Left overhang (non-empty portion of x that lies outside to the left of y).
-    fn left_overhang(self: Self, Range(ys, _): Range) -> Option<Range> {
+    fn left_overhang(self, Range(ys, _): Range) -> Option<Range> {
         Self::start_end(self.0, min(ys, self.0 + self.1))
     }
 
     // Intersection of x and y (non-empty portion that lies within both).
-    fn intersection(self: Self, Range(ys, yl): Range) -> Option<Range> {
+    fn intersection(self, Range(ys, yl): Range) -> Option<Range> {
         Range::start_end(max(self.0, ys), min(self.0 + self.1, ys + yl))
     }
 
     // Right overhang (non-empty portion of x that lies outside to the right of y).
-    fn right_overhang(self: Self, Range(ys, yl): Range) -> Option<Range> {
+    fn right_overhang(self, Range(ys, yl): Range) -> Option<Range> {
         Range::start_end(max(self.0, ys + yl), self.0 + self.1)
     }
 
     // Apply a single RangeMap to this range, assuming that it lies fully
     // within the source range of the RangeMap.
-    fn single_map(self: Self, m: &RangeMap) -> Range {
+    fn single_map(self, m: &RangeMap) -> Range {
         Range(self.0 + m.dst_start - m.src.0, self.1)
     }
 
@@ -47,7 +47,7 @@ impl Range {
     // how it intersects with the various source ranges within the mapping.
     //
     // The mapping is sorted by increasing source ranges.
-    fn map_into(self: Self, sorted_mapping: &Vec<RangeMap>, dest: &mut Vec<Range>) {
+    fn map_into(self, sorted_mapping: &Vec<RangeMap>, dest: &mut Vec<Range>) {
         let mut x: Range = self;
         for rm in sorted_mapping {
             if let Some(l) = x.left_overhang(rm.src) { dest.push(l) }
