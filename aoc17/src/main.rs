@@ -44,7 +44,21 @@ type State = (usize, usize, Direction, usize);
 type Memo = HashMap<State, u64>;
 type Work = VecDeque<State>;
 
-fn navigate(board: &Board, memo: &mut Memo, work: &mut Work, result: &mut u64)  {
+enum Part {
+    One,
+    Two,
+}
+
+impl Part {
+    fn permits(&self, old_d: Direction, new_d: Direction, dsteps: usize) -> bool {
+        match self {
+            Part::One => old_d != new_d || dsteps < 3,
+            Part::Two => (old_d != new_d || dsteps < 10) && (old_d == new_d || dsteps >= 4),
+        }
+    }
+}
+
+fn navigate(board: &Board, memo: &mut Memo, work: &mut Work, result: &mut u64, part: &Part)  {
     while let Some(state @ (i, j, _, _)) = work.pop_front() {
         let &loss = memo.get(&state).unwrap();
         if loss >= *result { continue }
@@ -52,7 +66,7 @@ fn navigate(board: &Board, memo: &mut Memo, work: &mut Work, result: &mut u64)  
             *result = loss;
             continue;
         } else {
-            try_schedule(board, state, loss, memo, work);
+            try_schedule(board, state, loss, memo, work, part);
         }
     }
 }
@@ -67,30 +81,30 @@ fn schedule(board: &Board, state: State, loss: u64, memo: &mut Memo, work: &mut 
     }
 }
 
-fn try_schedule(board: &Board, state: State, loss: u64, memo: &mut Memo, work: &mut Work) {
+fn try_schedule(board: &Board, state: State, loss: u64, memo: &mut Memo, work: &mut Work, part: &Part) {
     let (i, j, d, dsteps) = state;
-    if d != Down && i > 0 && (d != Up || dsteps < 10) && (d == Up || dsteps >= 4) {
+    if d != Down && i > 0 && part.permits(Up, d, dsteps) {
         schedule(board, (i - 1, j, Up, if d == Up { dsteps + 1 } else { 1 }), loss, memo, work);
     }
-    if d != Up && i < board.height - 1 && (d != Down || dsteps < 10) && (d == Down || dsteps >= 4)  {
+    if d != Up && i < board.height - 1 && part.permits(Down, d, dsteps) {
         schedule(board, (i + 1, j, Down, if d == Down { dsteps + 1 } else { 1 }), loss, memo, work);
     }
-    if d != Right && j > 0 && (d != Left || dsteps < 10) && (d == Left || dsteps >= 4) {
+    if d != Right && j > 0 && part.permits(Left, d, dsteps) {
         schedule(board, (i, j - 1, Left, if d == Left { dsteps + 1 } else { 1 }), loss, memo, work);
     }
-    if d != Left && j < board.width - 1 && (d != Right || dsteps < 10) && (d == Right || dsteps >= 4) {
+    if d != Left && j < board.width - 1 && part.permits(Right, d, dsteps) {
         schedule(board, (i, j + 1, Right, if d == Right { dsteps + 1 } else { 1 }), loss, memo, work);
     }
 }
 
-fn find_best(board: &Board) -> u64 {
+fn find_best(board: &Board, part: &Part) -> u64 {
     let mut result = std::u64::MAX;
     let mut memo = HashMap::new();
     let mut work = VecDeque::new();
     let initial = (0, 0, Right, 0);
     memo.insert(initial, 0);
     work.push_back(initial);
-    navigate(&board, &mut memo, &mut work, &mut result);
+    navigate(&board, &mut memo, &mut work, &mut result, part);
     result
 }
 
@@ -109,7 +123,8 @@ fn main() {
         .expect("Could not read file");
 
     let board = Board::from(&contents);
-    let result = find_best(&board);
+    let part1 = find_best(&board, &Part::One);
+    let part2 = find_best(&board, &Part::Two);
 
-    println!("{result}");
+    println!("part 1: {part1}, part2 : {part2}");
 }
