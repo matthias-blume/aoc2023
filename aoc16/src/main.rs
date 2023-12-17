@@ -1,3 +1,7 @@
+// Advent-of-Code 2023
+// Day 16
+// Author: Matthias Blume
+
 use std::env;
 use std::fs;
 use std::ops::{Index,IndexMut};
