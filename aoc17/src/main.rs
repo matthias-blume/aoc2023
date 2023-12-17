@@ -1,7 +1,3 @@
-// Advent-of-Code 2023
-// Day 17
-// Author: Matthias Blume
-
 use std::env;
 use std::fs;
 use std::collections::HashMap;
@@ -10,15 +6,15 @@ use std::collections::VecDeque;
 struct Board {
     height: usize,
     width: usize,
-    m: Vec<Vec<u64>>,
+    losses: Vec<Vec<u64>>,
 }
 
 impl Board {
-    fn new(m: Vec<Vec<u64>>) -> Self {
+    fn new(losses: Vec<Vec<u64>>) -> Self {
         Board {
-            height: m.len(),
-            width: if m.len() > 0 { m[0].len() } else { 0 },
-            m: m,
+            height: losses.len(),
+            width: if losses.len() > 0 { losses[0].len() } else { 0 },
+            losses,
         }
     }
 
@@ -73,7 +69,7 @@ fn navigate(board: &Board, memo: &mut Memo, work: &mut Work, result: &mut u64, p
 
 fn schedule(board: &Board, state: State, loss: u64, memo: &mut Memo, work: &mut Work) {
     let (i, j, _, _) = state;
-    let loss = loss + board.m[i][j];
+    let loss = loss + board.losses[i][j];
     let &prev = memo.get(&state).unwrap_or(&std::u64::MAX);
     if prev > loss {
         memo.insert(state, loss);
