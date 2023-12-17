@@ -1,7 +1,76 @@
 use std::env;
 use std::fs;
 use std::collections::HashMap;
-use std::collections::VecDeque;
+use std::collections::BinaryHeap;
+use std::cmp::{PartialOrd,Ord,Reverse};
+
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug, PartialOrd, Ord)]
+enum Direction {
+    Up,
+    Down,
+    Left,
+    Right,
+}
+use Direction::*;
+
+impl Direction {
+    fn reverse(self) -> Self {
+        match self {
+            Up => Down,
+            Down => Up,
+            Left => Right,
+            Right => Left,
+        }
+    }
+}
+
+#[derive(Copy, Clone)]
+enum Part {
+    One,
+    Two,
+}
+
+impl Part {
+    fn permits(self, old: Direction, new: Direction, dsteps: usize) -> bool {
+        match self {
+            Part::One =>
+                old != new || dsteps < 3,
+            Part::Two =>
+                (old != new || dsteps < 10) && (old == new || dsteps >= 4),
+        }
+    }
+}
+
+#[derive(PartialEq, Eq, Hash, Copy, Clone, PartialOrd, Ord)]
+struct State {
+    i: usize,
+    j: usize,
+    dinfo: Option<(Direction, usize)>,
+}
+
+impl State {
+    fn next(&self, d: Direction, board: &Board, part: Part) -> Option<Self> {
+        let dinfo =
+            if let Some((old_d, dsteps)) = self.dinfo {
+                if old_d == d.reverse() { return None }
+                if !part.permits(old_d, d, dsteps) { return None }
+                let dsteps = if old_d == d { dsteps + 1 } else { 1 };
+                Some((d, dsteps))
+            } else {
+                Some((d, 1))
+            };
+        match d {
+            Up => (self.i > 0)
+                .then(|| State{ i: self.i - 1, j: self.j, dinfo }),
+            Down => (self.i < board.height - 1)
+                .then(|| State{ i: self.i + 1, j: self.j, dinfo }),
+            Left => (self.j > 0)
+                .then(|| State{ i: self.i, j: self.j - 1, dinfo }),
+            Right => (self.j < board.width - 1)
+                .then(|| State{ i: self.i, j: self.j + 1, dinfo }),
+        }
+    }
+}
 
 struct Board {
     height: usize,
@@ -11,10 +80,10 @@ struct Board {
 
 impl Board {
     fn new(losses: Vec<Vec<u64>>) -> Self {
-        Board {
-            height: losses.len(),
-            width: if losses.len() > 0 { losses[0].len() } else { 0 },
-            losses,
+        let height = losses.len();
+        Board{ height,
+               width: if height > 0 { losses[0].len() } else { 0 },
+               losses,
         }
     }
 
@@ -25,83 +94,53 @@ impl Board {
     fn from(input: &str) -> Self {
         Self::new(input.lines().map(Self::read_line).collect())
     }
+
+    fn with_loss(&self, state: State) -> (State, u64) {
+        (state, self.losses[state.i][state.j])
+    }
+    
+    fn successors(&'_ self, state: State, part: Part) -> impl IntoIterator<Item = (State, u64)> + '_ {
+        vec![Up, Down, Left, Right]
+            .into_iter()
+            .filter_map(
+                move |d| state.next(d, self, part)
+                    .map(|state| self.with_loss(state)))
+    }
+
+    fn is_goal(&self, state: State) -> bool {
+        state.i == self.height - 1 && state.j == self.width - 1
+    }
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
-enum Direction {
-    Up,
-    Down,
-    Left,
-    Right,
-}
-use Direction::*;
-
-type State = (usize, usize, Direction, usize);
-type Memo = HashMap<State, u64>;
-type Work = VecDeque<State>;
-
-enum Part {
-    One,
-    Two,
+#[derive(PartialEq, Eq, PartialOrd, Ord)]
+struct WorkItem {
+    best: u64,
+    state: State,
 }
 
-impl Part {
-    fn permits(&self, old_d: Direction, new_d: Direction, dsteps: usize) -> bool {
-        match self {
-            Part::One => old_d != new_d || dsteps < 3,
-            Part::Two => (old_d != new_d || dsteps < 10) && (old_d == new_d || dsteps >= 4),
+// Dijkstra using a BinaryHeap in lieu of a proper priority queue.
+fn find_best(board: &Board, part: Part) -> u64 {
+    let mut best_so_far = HashMap::new();
+    let mut heap = BinaryHeap::new();
+    let initial = State{ i: 0, j: 0, dinfo: None };
+    best_so_far.insert(initial, 0);
+    heap.push(Reverse(WorkItem{ best: 0, state: initial }));
+    while let Some(Reverse(cur)) = heap.pop() {
+        let &cur_best = best_so_far.get(&cur.state).unwrap_or(&std::u64::MAX);
+        if board.is_goal(cur.state) {
+            return cur_best
+        }
+        if cur_best < cur.best { continue }; // because not a real PQ
+        for (new_state, loss) in board.successors(cur.state, part) {
+            let &orig = best_so_far.get(&new_state).unwrap_or(&std::u64::MAX);
+            let new = cur_best + loss;
+            if new < orig {
+                best_so_far.insert(new_state, new);
+                heap.push(Reverse(WorkItem{ state: new_state, best: new }));
+            }
         }
     }
-}
-
-fn navigate(board: &Board, memo: &mut Memo, work: &mut Work, result: &mut u64, part: &Part)  {
-    while let Some(state @ (i, j, _, _)) = work.pop_front() {
-        let &loss = memo.get(&state).unwrap();
-        if loss >= *result { continue }
-        if i == board.height - 1 && j == board.width - 1 {
-            *result = loss;
-            continue;
-        } else {
-            try_schedule(board, state, loss, memo, work, part);
-        }
-    }
-}
-
-fn schedule(board: &Board, state: State, loss: u64, memo: &mut Memo, work: &mut Work) {
-    let (i, j, _, _) = state;
-    let loss = loss + board.losses[i][j];
-    let &prev = memo.get(&state).unwrap_or(&std::u64::MAX);
-    if prev > loss {
-        memo.insert(state, loss);
-        work.push_back(state);
-    }
-}
-
-fn try_schedule(board: &Board, state: State, loss: u64, memo: &mut Memo, work: &mut Work, part: &Part) {
-    let (i, j, d, dsteps) = state;
-    if d != Down && i > 0 && part.permits(Up, d, dsteps) {
-        schedule(board, (i - 1, j, Up, if d == Up { dsteps + 1 } else { 1 }), loss, memo, work);
-    }
-    if d != Up && i < board.height - 1 && part.permits(Down, d, dsteps) {
-        schedule(board, (i + 1, j, Down, if d == Down { dsteps + 1 } else { 1 }), loss, memo, work);
-    }
-    if d != Right && j > 0 && part.permits(Left, d, dsteps) {
-        schedule(board, (i, j - 1, Left, if d == Left { dsteps + 1 } else { 1 }), loss, memo, work);
-    }
-    if d != Left && j < board.width - 1 && part.permits(Right, d, dsteps) {
-        schedule(board, (i, j + 1, Right, if d == Right { dsteps + 1 } else { 1 }), loss, memo, work);
-    }
-}
-
-fn find_best(board: &Board, part: &Part) -> u64 {
-    let mut result = std::u64::MAX;
-    let mut memo = HashMap::new();
-    let mut work = VecDeque::new();
-    let initial = (0, 0, Right, 0);
-    memo.insert(initial, 0);
-    work.push_back(initial);
-    navigate(&board, &mut memo, &mut work, &mut result, part);
-    result
+    std::u64::MAX
 }
 
 fn main() {
@@ -119,8 +158,8 @@ fn main() {
         .expect("Could not read file");
 
     let board = Board::from(&contents);
-    let part1 = find_best(&board, &Part::One);
-    let part2 = find_best(&board, &Part::Two);
+    let part1 = find_best(&board, Part::One);
+    let part2 = find_best(&board, Part::Two);
 
     println!("part 1: {part1}, part2 : {part2}");
 }
