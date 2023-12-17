@@ -49,6 +49,7 @@ impl TileConfig {
     }
 }
 
+// Fields that are true indicate outgoing light.
 struct TileState {
     up: bool,
     down: bool,
@@ -62,6 +63,7 @@ impl TileState {
     }
 }
 
+// Allow a TileState to be indexed by a Direction.
 impl Index<Direction> for TileState {
     type Output = bool;
     fn index(&self, index: Direction) -> &Self::Output {
@@ -74,6 +76,7 @@ impl Index<Direction> for TileState {
     }
 }
 
+// Allow a TileState to be mutably indexed by a Direction.
 impl IndexMut<Direction> for TileState {
     fn index_mut(&mut self, index: Direction) -> &mut Self::Output {
         match index {
@@ -125,10 +128,10 @@ fn read_line(line: &str) -> Vec<TileConfig> {
 // direction.  If this update changes the state, then propagate
 // light in that direction.
 fn maybe_propagate(d: Direction, p: Pos, config: &Config, state: &mut State) {
-    let st = &mut state[p.0 as usize][p.1 as usize][d];
-    let was_set = *st;
-    *st = true;
-    if !was_set { propagate(d, d.incr(p), config, state) }
+    let indicator = &mut state[p.0 as usize][p.1 as usize][d];
+    let was_already_set = *indicator;
+    *indicator = true;
+    if !was_already_set { propagate(d, d.incr(p), config, state) }
 }
 
 // Propagate light into a position, going in the given direction.
@@ -155,7 +158,7 @@ fn propagate(d: Direction, p: Pos, config: &Config, state: &mut State) {
 
 // Tile is active if light is flowing out into any direction.
 fn is_active(s: &&TileState) -> bool {
-    [Up, Down, Left, Right].iter().any(|&d| s[d])
+    s.up || s.down || s.left || s.right
 }
 
 // Count active tiles after propagating light from the given position,
@@ -190,6 +193,11 @@ fn max_vert_active(config: &Config) -> usize {
         .fold(m, max)
 }
 
+// Maximizes active tiles, starting from any edge in any direction.
+fn max_hor_or_vert_active(config: &Config) -> usize {
+    max_hor_active(config).max(max_vert_active(config))
+}
+
 fn main() {
     let mut args = env::args();
     let program = match args.next() {
@@ -204,10 +212,10 @@ fn main() {
     let contents = fs::read_to_string(file_path)
         .expect("Could not read file");
 
-    let config: Config = Config::new(contents.lines().map(read_line).collect());
+    let config = Config::new(contents.lines().map(read_line).collect());
 
-    let max_active = max_hor_active(&config).max(max_vert_active(&config));
+    let active_from_origin_going_right = num_active(Right, (0, 0), &config);
+    let max_active = max_hor_or_vert_active(&config);
     
-    let part1 = num_active(Right, (0, 0), &config);
-    println!("{part1} {max_active}");
+    println!("part 1: {active_from_origin_going_right}, part 2: {max_active}");
 }
