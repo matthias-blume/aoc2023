@@ -1,3 +1,7 @@
+// Advent-of-Code 2023
+// Day 17
+// Author: Matthias Blume
+
 use std::env;
 use std::fs;
 use std::collections::HashMap;
