@@ -1,3 +1,9 @@
+// Advent-of-Code 2023
+// Day 18
+// Author: Matthias Blume
+//
+// (Using pathfinding crate.)
+
 use std::env;
 use std::fs;
 
