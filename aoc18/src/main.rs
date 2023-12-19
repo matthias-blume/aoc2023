@@ -41,6 +41,9 @@ type Row = BTreeMap<i64, Tile>;
 type Board = BTreeMap<i64, Row>;
 type Pos = (i64, i64);
 
+#[derive(PartialEq, Eq, Copy, Clone)]
+enum Part { One, Two }
+
 struct Step(Direction, i64);
 
 impl Step {
@@ -57,10 +60,11 @@ impl Step {
         Step(dir, dist)
     }
     
-    fn from(line: &str) -> Self {
-        match line.split_whitespace().collect::<Vec<_>>().as_slice() {
-            [dir, dist, col] =>
-                //Step(Direction::from(dir), dist.parse::<i64>().expect("distance")),
+    fn from(line: &str, part: Part) -> Self {
+        match (line.split_whitespace().collect::<Vec<_>>().as_slice(), part) {
+            ([dir, dist, _], Part::One) =>
+                Step(Direction::from(dir), dist.parse::<i64>().expect("distance")),
+            ([_, _, col], Part::Two) =>
                 Step::from_color(col),
             _ => panic!("bad step"),
         }
@@ -146,7 +150,6 @@ fn board_area(board: &Board) -> i64 {
         let num_skipped = key - prev_key - 1;
         if num_skipped > 0 {
             let line_area = row_area(&skipped_row).0;
-            eprintln!("{num_skipped} * {line_area}");
             area += num_skipped * line_area;
         }
         let row = board.get(key).expect("row");
@@ -154,7 +157,6 @@ fn board_area(board: &Board) -> i64 {
             skipped_row.insert(k, v);
         }
         let (row_area, new_skipped) = row_area(&skipped_row);
-        eprintln!("{key}: {row_area}");
         area += row_area;
         skipped_row = new_skipped;
         prev_key = *key;
@@ -176,9 +178,13 @@ fn main() {
     let contents = fs::read_to_string(file_path)
         .expect("Could not read file");
 
-    let steps = contents.lines().map(Step::from).collect();
-    let board = Step::to_board(&steps);
-    let area = board_area(&board);
+    let steps1 = contents.lines().map(|line| Step::from(line, Part::One)).collect();
+    let board1 = Step::to_board(&steps1);
+    let area1 = board_area(&board1);
     
-    println!("{area}");
+    let steps2 = contents.lines().map(|line| Step::from(line, Part::Two)).collect();
+    let board2 = Step::to_board(&steps2);
+    let area2 = board_area(&board2);
+    
+    println!("Part 1: {area1}, part 2: {area2}");
 }
