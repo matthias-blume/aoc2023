@@ -168,6 +168,7 @@ mod data {
 
 mod part1 {
     use crate::data::*;
+    use std::collections::HashSet;
     
     impl Data<i64> {
         pub fn total(&self) -> i64 {
@@ -187,25 +188,25 @@ mod part1 {
     
     impl<'a> Rule<'a> {
         fn eval(&self, data: Data<i64>) -> Option<Action<'a>> {
-            if self.condition.holds_for(data) { Some(self.action) } else { None }
+            self.condition.holds_for(data).then_some(self.action)
         }
     }
 
     impl <'a> Workflow<'a> {
-            fn eval(&self, data: Data<i64>) -> Action<'a> {
-                for rule in self.rules.iter() {
-                    if let Some(action) = rule.eval(data) {
-                        return action;
-                    }
-                }
-                self.catchall
+        fn eval(&self, data: Data<i64>) -> Action<'a> {
+            self.rules.iter()
+                .find_map(|rule| rule.eval(data))
+                .unwrap_or(self.catchall)
             }
     }
 
     impl WorkflowSuite<'_> {
         pub fn accepts(&self, data: Data<i64>) -> bool {
             let mut cur = "in";
+            let mut seen = HashSet::new();
             loop {
+                if seen.contains(cur) { panic!("cycle at {}", cur) };
+                seen.insert(cur);
                 match self.get(cur).eval(data) {
                     Accept => return true,
                     Reject => return false,
@@ -344,12 +345,9 @@ fn main() {
     }
     let suite = WorkflowSuite::new(workflows);
 
-    let mut total = 0;
-    for d in data {
-        if suite.accepts(d) {
-            total += d.total();
-        }
-    }
+    let total: i64 = data.iter()
+        .filter_map(|&d| suite.accepts(d).then(|| d.total()))
+        .sum();
 
     println!("part 1: {total}");
 
