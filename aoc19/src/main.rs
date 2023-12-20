@@ -4,233 +4,317 @@
 
 use std::env;
 use std::fs;
-use std::collections::HashMap;
 
-#[derive(PartialEq, Eq, Clone)]
-enum Action {
-    Accept,
-    Reject,
-    SendToWorkflow(String),
-}
-use Action::*;
+mod data {
 
-impl Action {
-    fn from(s: &str) -> Self {
-        match s {
-            "A" => Accept,
-            "R" => Reject,
-            _ => SendToWorkflow(s.to_string()),
-        }
+    #[derive(PartialEq, Eq, Clone, Copy)]
+    pub enum Action<'a> {
+        Accept,
+        Reject,
+        SendToWorkflow(&'a str),
     }
+    pub use Action::*;
 
-    fn count(&self, rd: RangeData, workflows: &Vec<Workflow>) -> i64 {
-        match self {
-            Accept => rd.num_combinations(),
-            Reject => 0,
-            SendToWorkflow(w) => {
-                let wf = workflows.iter().find(|x| x.name == *w).expect("workflow!");
-                wf.count(rd, workflows)
-            },
-        }
-    }
-}
-
-#[derive(PartialEq, Eq, Copy, Clone, Hash, Debug)]
-enum Prop { X, M, A, S }
-
-impl Prop {
-    fn from(s: &str) -> Self {
-        match s {
-            "x" => Prop::X,
-            "m" => Prop::M,
-            "a" => Prop::A,
-            "s" => Prop::S,
-            _ => panic!("prop")
-        }
-    }
-}
-
-#[derive(PartialEq, Eq, Copy, Clone)]
-enum Comp { Less, Greater }
-
-impl Comp {
-    fn from(s: &str) -> Self {
-        match s {
-            "<" => Comp::Less,
-            ">" => Comp::Greater,
-            _ => panic!("comp"),
-        }
-    }
-}
-
-struct Condition(Prop, Comp, i64);
-
-impl Condition {
-    fn from(s: &str) -> Self {
-        Condition(Prop::from(&s[0..1]), Comp::from(&s[1..2]), s[2..].parse::<i64>().expect("condition value"))
-    }
-
-    fn holds_for(&self, data: &Data) -> bool {
-        if let Some(&prop_val) = data.0.get(&self.0) {
-            match self.1 {
-                Comp::Less => prop_val < self.2,
-                Comp::Greater => prop_val > self.2,
+    impl<'a> Action<'a> {
+        fn from(s: &'a str) -> Self {
+            match s {
+                "A" => Accept,
+                "R" => Reject,
+                _ => SendToWorkflow(s),
             }
-        } else { false }
-    }
-
-    fn split(&self, rd: &RangeData) -> (Option<RangeData>, Option<RangeData>) {
-        let Condition(p, c, v) = self;
-        let (start, end) = rd.0.get(&p).expect("range!");
-        let (gstart, gend, bstart, bend) = match c {
-            Comp::Less => {
-                if end <= v { (*start, *end, 0, 0) }
-                else if v < start { (0, 0, *start, *end) }
-                else { (*start, *v, *v, *end) }
-            },
-            Comp::Greater => {
-                if start > v { (*start, *end, 0,  0) }
-                else if v >= end { (0, 0, *start, *end) }
-                else { (*v + 1, *end, *start, *v + 1) }
-            },
-        };
-        let good =
-            if gstart < gend {
-                let mut rdgood = (*rd).clone();
-                rdgood.0.insert(*p, (gstart, gend));
-                Some(rdgood)
-            } else { None };
-        let bad =
-            if bstart < bend {
-                let mut rdbad = (*rd).clone();
-                rdbad.0.insert(*p, (bstart, bend));
-                Some(rdbad)
-            } else { None };
-        (good, bad)
-    }
-}
-
-struct Rule(Condition, Action);
-
-impl Rule {
-    fn from(s: &str) -> Self {
-        match s.split(":").collect::<Vec<_>>().as_slice() {
-            [cond_str, act_str] =>
-                Rule(Condition::from(cond_str), Action::from(act_str)),
-            _ => panic!("rule"),
         }
     }
 
-    fn eval(&self, data: &Data) -> Option<Action> {
-        if self.0.holds_for(data) { Some(self.1.clone()) } else { None }
+    #[derive(PartialEq, Eq, Copy, Clone, Hash)]
+    pub enum Prop { X, M, A, S }
+
+    impl Prop {
+        fn from(s: &str) -> Self {
+            match s {
+                "x" => Prop::X,
+                "m" => Prop::M,
+                "a" => Prop::A,
+                "s" => Prop::S,
+                _ => panic!("prop")
+            }
+        }
     }
 
-    fn split(&self, rd: &RangeData) -> (Option<RangeData>, Option<RangeData>) {
-        self.0.split(rd)
+    #[derive(PartialEq, Eq, Copy, Clone)]
+    pub enum Comp { Less, Greater }
+
+    impl Comp {
+        fn from(s: &str) -> Self {
+            match s {
+                "<" => Comp::Less,
+                ">" => Comp::Greater,
+                _ => panic!("comp"),
+            }
+        }
+    }
+
+    pub struct Condition {
+        pub prop: Prop,
+        pub comp: Comp,
+        pub value: i64,
+    }
+
+    impl Condition {
+        fn from(s: &str) -> Self {
+            Condition {
+                prop: Prop::from(&s[0..1]),
+                comp: Comp::from(&s[1..2]),
+                value: s[2..].parse::<i64>().expect("condition value"),
+            }
+        }
+    }
+
+    pub struct Rule<'a> {
+        pub condition: Condition,
+        pub action: Action<'a>,
+    }
+
+    impl<'a> Rule<'a> {
+        fn from(s: &'a str) -> Self {
+            match s.split(":").collect::<Vec<_>>().as_slice() {
+                [cond_str, act_str] =>
+                    Rule{
+                        condition: Condition::from(cond_str),
+                        action: Action::from(act_str),
+                    },
+                _ => panic!("rule"),
+            }
+        }
+    }
+
+    pub struct Workflow<'a> {
+        pub name: &'a str,
+        pub rules: Vec<Rule<'a>>,
+        pub catchall: Action<'a>,
+    }
+
+    impl<'a> Workflow<'a> {
+        pub fn from(s: &'a str) -> Self {
+            match s.split("{").collect::<Vec<_>>().as_slice() {
+                [name, rest] => {
+                    match rest[..rest.len()-1].split(",").collect::<Vec<_>>().as_slice() {
+                        [rule_strings @ .., catchall_string] =>
+                            Workflow {
+                                name: name,
+                                rules: rule_strings.iter().map(|&s| Rule::from(s)).collect(),
+                                catchall: Action::from(catchall_string),
+                            },
+                        _ => panic!("rules"),
+                    }
+                },
+                _ => panic!("workflow name"),
+            }
+        }
+    }
+
+    pub struct WorkflowSuite<'a> {
+        workflows: Vec<Workflow<'a>>,
+    }
+
+    impl<'a> WorkflowSuite<'a> {
+        pub fn new(v: Vec<Workflow<'a>>) -> Self {
+            WorkflowSuite{ workflows: v }
+        }
+
+        pub fn get(&'a self, name: &str) -> &'a Workflow<'a> {
+            self.workflows.iter().find(|&w| w.name == name).expect("workflow?")
+        }
+    }
+
+    #[derive(Clone, Copy, PartialEq, Eq, Hash)]
+    pub struct Data<T>{ pub x: T,  pub m: T, pub a: T, pub s: T }
+
+    impl<T> Data<T> where T: Copy {
+        pub fn get<'a>(&'a self, p: Prop) -> T {
+            match p {
+                Prop::X => self.x,
+                Prop::M => self.m,
+                Prop::A => self.a,
+                Prop::S => self.s,
+            }
+        }
+
+        pub fn update(self, p: Prop, v: T) -> Self {
+            match p {
+                Prop::X => Data{ x: v, ..self },
+                Prop::M => Data{ m: v, ..self },
+                Prop::A => Data{ a: v, ..self },
+                Prop::S => Data{ s: v, ..self },
+            }
+        }
+    }
+
+    impl Data<i64> {
+        fn zero() -> Self {
+            Data{ x: 0, m: 0, a: 0, s: 0 }
+        }
+    
+        fn read_prop(self, s: &str) -> Self {
+            if &s[1..2] != "=" { panic!("bad prop value spec: {}", s); };
+            self.update(Prop::from(&s[0..1]),
+                        s[2..].parse::<i64>().expect("data value"))
+        }
+
+        pub fn from(s: &str) -> Self {
+            s[1..s.len()-1].split(",").fold(Self::zero(), Self::read_prop)
+        }
     }
 }
 
-struct Workflow {
-    name: String,
-    rules: Vec<Rule>,
-    catchall: Action,
-}
+mod part1 {
+    use crate::data::*;
+    
+    impl Data<i64> {
+        pub fn total(&self) -> i64 {
+            self.x + self.m + self.a + self.s
+        }
+    }
 
-impl Workflow {
-    fn from(s: &str) -> Self {
-        match s.split("{").collect::<Vec<_>>().as_slice() {
-            [name, rest] => {
-                match rest[..rest.len()-1].split(",").collect::<Vec<_>>().as_slice() {
-                    [rule_strings @ .., catchall_string] =>
-                        Workflow {
-                            name: name.to_string(),
-                            rules: rule_strings.iter().map(|&s| Rule::from(s)).collect(),
-                            catchall: Action::from(catchall_string),
-                        },
-                    _ => panic!("rules"),
+    impl Condition {
+        pub fn holds_for(&self, data: Data<i64>) -> bool {
+            let prop_val =  data.get(self.prop);
+            match self.comp {
+                Comp::Less => prop_val < self.value,
+                Comp::Greater => prop_val > self.value,
+            }
+        }
+    }
+    
+    impl<'a> Rule<'a> {
+        fn eval(&self, data: Data<i64>) -> Option<Action<'a>> {
+            if self.condition.holds_for(data) { Some(self.action) } else { None }
+        }
+    }
+
+    impl <'a> Workflow<'a> {
+            fn eval(&self, data: Data<i64>) -> Action<'a> {
+                for rule in self.rules.iter() {
+                    if let Some(action) = rule.eval(data) {
+                        return action;
+                    }
                 }
-            },
-            _ => panic!("workflow name"),
-        }
-    }
-
-    fn eval(&self, data: &Data) -> Action {
-        for rule in self.rules.iter() {
-            if let Some(action) = rule.eval(data) {
-                return action;
+                self.catchall
             }
-        }
-        self.catchall.clone()
     }
 
-    fn count(&self, rd: RangeData, workflows: &Vec<Workflow>) -> i64 {
-        let mut cur = rd;
-        let mut total = 0;
-        for rule in self.rules.iter() {
-            let (good, bad) = rule.split(&cur);
-            if let Some(g) = good {
-                total += rule.1.count(g, workflows);
-            };
-            if let Some(b) = bad {
-                cur = b;
-            } else {
-                return total
-            }
-        }
-        total += self.catchall.count(cur, workflows);
-        total
-    }
-}
-
-#[derive(Debug)]
-struct Data(HashMap<Prop, i64>);
-
-impl Data {
-    fn read_prop_val(s: &str) -> (Prop, i64) {
-        (Prop::from(&s[0..1]), s[2..].parse::<i64>().expect("data value"))
-    }
-
-    fn from(s: &str) -> Self {
-        Data(s[1..s.len()-1].split(",").map(Data::read_prop_val).collect())
-    }
-
-    fn total(&self) -> i64 {
-        self.0.values().sum()
-    }
-
-    fn is_accepted(&self, workflows: &Vec<Workflow>) -> bool {
-        let mut cur = String::from("in");
-        loop {
-            let wf = workflows.iter().find(|&x| x.name == *cur).expect("workflow");
-            match wf.eval(self) {
-                Accept => return true,
-                Reject => return false,
-                SendToWorkflow(w) => cur = w,
+    impl WorkflowSuite<'_> {
+        pub fn accepts(&self, data: Data<i64>) -> bool {
+            let mut cur = "in";
+            loop {
+                match self.get(cur).eval(data) {
+                    Accept => return true,
+                    Reject => return false,
+                    SendToWorkflow(w) => cur = w,
+                }
             }
         }
     }
 }
 
-#[derive(Clone)]
-struct RangeData(HashMap<Prop, (i64, i64)>);
+mod part2 {
+    use crate::data::*;
+    use std::collections::HashSet;
 
-impl RangeData {
-    fn num_combinations(&self) -> i64 {
-        self.0.values().map(|(start, end)| end-start).product()
+    pub type RangeData = Data<(i64, i64)>;
+
+    type Key<'a> = (&'a str, RangeData);
+    type Seen<'a> = HashSet<Key<'a>>;
+
+    fn width((x, y): (i64, i64)) -> i64 { y - x }
+
+    impl RangeData {
+        fn num_combinations(&self) -> i64 {
+            width(self.x) * width(self.m) * width(self.a) * width(self.s)
+        }
+
+        pub fn from_range(start: i64, len: i64) -> Self {
+            let r = (start, start + len);
+            Data { x: r, m: r, a: r, s: r }
+        }
     }
 
-    fn full() -> Self {
-        RangeData(
-            vec![(Prop::X, (1, 4001)), (Prop::M, (1, 4001)), (Prop::A, (1, 4001)), (Prop::S, (1, 4001))]
-                .into_iter()
-                .collect())
+    impl<'a> Action<'a> {
+        fn count(&'a self, rd: RangeData, workflows: &'a WorkflowSuite<'a>,
+                 seen: &mut Seen<'a>) -> i64 {
+            match self {
+                Accept => rd.num_combinations(),
+                Reject => 0,
+                SendToWorkflow(w) =>
+                    workflows.get(w).count(rd, workflows, seen),
+            }
+        }
     }
 
-    fn count_all(workflows: &Vec<Workflow>) -> i64 {
-        let wf = workflows.iter().find(|x| x.name == "in").expect("start workflow");
-        wf.count(RangeData::full(), workflows)
+    impl Comp {
+        fn split_range(self, (start, end): (i64, i64), v: i64)
+                       -> (Option<(i64, i64)>, Option<(i64, i64)>) {
+            let s = match self { Comp::Less => v, Comp::Greater => v + 1 };
+            let (low, high) =
+                if s <= start { (None, Some((start, end))) }
+            else if end <= s { (Some((start, end)), None) }
+            else { (Some((start, s)), Some((s, end))) };
+            match self {
+                Comp::Less => (low, high),
+                Comp::Greater => (high, low),
+            }
+        }
+    }
+
+    impl Condition {
+        fn split(&self, rd: &RangeData)
+                 -> (Option<RangeData>, Option<RangeData>) {
+            let &Condition{ prop: p, comp: c, value: v } = self;
+            let (good_range, bad_range) = c.split_range(rd.get(p), v);
+            let good = good_range.map(|g| rd.update(p, g));
+            let bad = bad_range.map(|b| rd.update(p, b));
+            (good, bad)
+        }
+    }
+
+    impl Rule<'_> {
+        fn split(&self, rd: &RangeData)
+                 -> (Option<RangeData>, Option<RangeData>) {
+            self.condition.split(rd)
+        }
+    }
+
+    impl<'a> Workflow<'a> {
+        fn count(&'a self, rd: RangeData, workflows: &'a WorkflowSuite<'a>,
+                 seen: &mut Seen<'a>) -> i64 {
+            let key = (self.name, rd);
+            if seen.contains(&key) { panic!("cycle at {}!", self.name) };
+            seen.insert(key);
+            let mut cur = rd;
+            let mut total = 0;
+            for rule in self.rules.iter() {
+                let (good, bad) = rule.split(&cur);
+                if let Some(g) = good {
+                    total += rule.action.count(g, workflows, seen);
+                };
+                if let Some(b) = bad {
+                    cur = b;
+                } else {
+                    return total
+                }
+            }
+            total += self.catchall.count(cur, workflows, seen);
+            total
+        }
+    }
+
+    impl WorkflowSuite<'_> {
+        pub fn count(&self, rd: RangeData) -> i64 {
+            self.get("in").count(rd, self, &mut HashSet::new())
+        }
     }
 }
+
+use data::*;
 
 fn main() {
     let mut args = env::args();
@@ -258,17 +342,18 @@ fn main() {
             data.push(Data::from(line));
         }
     }
+    let suite = WorkflowSuite::new(workflows);
 
     let mut total = 0;
     for d in data {
-        if d.is_accepted(&workflows) {
+        if suite.accepts(d) {
             total += d.total();
         }
     }
 
     println!("part 1: {total}");
 
-    let combinations = RangeData::count_all(&workflows);
+    let combinations = suite.count(part2::RangeData::from_range(1, 4000));
 
     println!("part 2: {combinations}");
 }
