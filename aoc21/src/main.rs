@@ -39,7 +39,7 @@ impl Plot {
 
 type Occu = BTreeSet<(i64, i64)>;
 
-fn make_initial(plot: &Plot, (i, j): (usize, usize)) -> Occu {
+fn make_initial((i, j): (usize, usize)) -> Occu {
     vec![(i as i64, j as i64)].into_iter().collect()
 }
 
@@ -53,7 +53,7 @@ fn step(plot: &Plot, state: Occu) -> Occu {
 }
 
 fn count_after(plot: &Plot, p: (usize, usize), n: usize) -> usize {
-    let mut state = make_initial(plot, p);
+    let mut state = make_initial(p);
     for _ in 0..n {
         state = step(plot, state);
     }
@@ -69,14 +69,14 @@ fn double_step(plot: &Plot, state: Occu) -> (bool, Occu) {
 }
 
 fn double_step_stabilize(plot: &Plot, p: (usize, usize), one_step: bool) -> (usize, usize) {
-    let mut state = make_initial(plot, p);
-    let mut changed = true;
+    let mut state = make_initial(p);
     let mut steps = if one_step {
         state = step(plot, state);
         2
     } else  { 0 };
     loop {
-        (changed, state) = double_step(plot, state);
+        let (changed, new_state) = double_step(plot, state);
+        state = new_state;
         if !changed { break };
         steps += 2;
     }
@@ -139,8 +139,8 @@ fn main() {
     let n1: i64 = 7383;
     let n2: i64 = 7457; // origin settles here
     
-    let straight_settles = 194; // n1, n2
-    let diag_settles = 260; // n2, n1
+    // let straight_settles = 194; // n1, n2
+    // let diag_settles = 260; // n2, n1
 
     let n: i64 = 26501365;
 
@@ -155,37 +155,37 @@ fn main() {
     println!("straight {rounds_straight} {r_straight}, diag {rounds_diag} {r_diag}");
 
 
-    let n_partial1 = count_after(&plot, pn, straight_rem);
-    let n_partial1 = count_after(&plot, pn, straight_rem + 131);
-    let n_partial1 = count_after(&plot, pn, straight_rem + 262);
+    let _ = count_after(&plot, pn, straight_rem);
+    let _ = count_after(&plot, pn, straight_rem + 131);
+    let _ = count_after(&plot, pn, straight_rem + 262);
 
-    let s_partial1 = count_after(&plot, ps, straight_rem);
-    let s_partial1 = count_after(&plot, ps, straight_rem + 131);
-    let s_partial1 = count_after(&plot, ps, straight_rem + 262);
+    let _ = count_after(&plot, ps, straight_rem);
+    let _ = count_after(&plot, ps, straight_rem + 131);
+    let _ = count_after(&plot, ps, straight_rem + 262);
 
-    let w_partial1 = count_after(&plot, pw, straight_rem);
-    let w_partial1 = count_after(&plot, pw, straight_rem + 131);
-    let w_partial1 = count_after(&plot, pw, straight_rem + 262);
+    let _ = count_after(&plot, pw, straight_rem);
+    let _ = count_after(&plot, pw, straight_rem + 131);
+    let _ = count_after(&plot, pw, straight_rem + 262);
 
-    let e_partial1 = count_after(&plot, pe, straight_rem);
-    let e_partial1 = count_after(&plot, pe, straight_rem + 131);
-    let e_partial1 = count_after(&plot, pe, straight_rem + 262);
+    let _ = count_after(&plot, pe, straight_rem);
+    let _ = count_after(&plot, pe, straight_rem + 131);
+    let _ = count_after(&plot, pe, straight_rem + 262);
 
-    let nw_partial0 = count_after(&plot, pnw, diag_rem);
-    let nw_partial1 = count_after(&plot, pnw, diag_rem + 131);
-    let nw_partial2 = count_after(&plot, pnw, diag_rem + 262);
+    let _ = count_after(&plot, pnw, diag_rem);
+    let _ = count_after(&plot, pnw, diag_rem + 131);
+    let _ = count_after(&plot, pnw, diag_rem + 262);
 
-    let sw_partial0 = count_after(&plot, psw, diag_rem);
-    let sw_partial1 = count_after(&plot, psw, diag_rem + 131);
-    let sw_partial2 = count_after(&plot, psw, diag_rem + 262);
+    let _ = count_after(&plot, psw, diag_rem);
+    let _ = count_after(&plot, psw, diag_rem + 131);
+    let _ = count_after(&plot, psw, diag_rem + 262);
 
-    let ne_partial0 = count_after(&plot, pne, diag_rem);
-    let ne_partial1 = count_after(&plot, pne, diag_rem + 131);
-    let ne_partial2 = count_after(&plot, pne, diag_rem + 262);
+    let _ = count_after(&plot, pne, diag_rem);
+    let _ = count_after(&plot, pne, diag_rem + 131);
+    let _ = count_after(&plot, pne, diag_rem + 262);
 
-    let se_partial0 = count_after(&plot, pse, diag_rem);
-    let se_partial1 = count_after(&plot, pse, diag_rem + 131);
-    let se_partial2 = count_after(&plot, pse, diag_rem + 262);
+    let _ = count_after(&plot, pse, diag_rem);
+    let _ = count_after(&plot, pse, diag_rem + 131);
+    let _ = count_after(&plot, pse, diag_rem + 262);
 
     let origin_total = n1;
     let straight_total =
