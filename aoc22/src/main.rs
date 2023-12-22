@@ -93,7 +93,7 @@ struct Stacking {
     bricks: Vec<Brick>
 }
 
-type IndexVec = Vec<usize>;
+type IndexSet = HashSet<usize>;
 
 impl Stacking {
     fn from_bricks(mut bricks: Vec<Brick>) -> Self {
@@ -103,29 +103,29 @@ impl Stacking {
         s
     }
 
-    fn supported(&self, n: usize) -> IndexVec {
+    fn supported(&self, n: usize) -> IndexSet {
         let b = &self.bricks[n];
         (n+1..self.sz).filter(|&i| b.supports(&self.bricks[i])).collect()
     }
 
-    fn all_supported(&self) -> Vec<IndexVec> {
+    fn all_supported(&self) -> Vec<IndexSet> {
         (0..self.sz).map(|i| self.supported(i)).collect()
     }
 
-    fn supporters(&self, n: usize) -> IndexVec {
+    fn supporters(&self, n: usize) -> IndexSet {
         let b = &self.bricks[n];
         (0..n).filter(|&i| self.bricks[i].supports(b)).collect()
     }
 
-    fn all_supporters(&self) -> Vec<IndexVec> {
+    fn all_supporters(&self) -> Vec<IndexSet> {
         (0..self.sz).map(|i| self.supporters(i)).collect()
     }
 }
 
 struct SupportInfo {
     sz: usize,
-    supported: Vec<IndexVec>,
-    supporters: Vec<IndexVec>,
+    supported: Vec<IndexSet>,
+    supporters: Vec<IndexSet>,
 }
 
 impl SupportInfo {
@@ -137,23 +137,23 @@ impl SupportInfo {
         }
     }
 
-    fn is_sole_support(&self, n: usize) -> bool {
-        self.supported[n].iter().any(|&i| self.supporters[i].len() == 1)
+    fn is_removable(&self, n: usize) -> bool {
+        self.supported[n].iter().all(|&i| self.supporters[i].len() != 1)
     }
 
-    fn destroy(&self, n: usize, toppled: &mut HashSet<usize>) {
+    fn topple(&self, n: usize, toppled: &mut HashSet<usize>) {
         if toppled.contains(&n) { return }
         toppled.insert(n);
         for j in self.supported[n].iter() {
-            if self.supporters[*j].iter().all(|k| toppled.contains(&k)) {
-                self.destroy(*j, toppled)
+            if self.supporters[*j].is_subset(&toppled) {
+                self.topple(*j, toppled)
             }
         }
     }
 
     fn num_toppled(&self, n: usize) -> usize {
         let mut toppled = HashSet::new();
-        self.destroy(n, &mut toppled);
+        self.topple(n, &mut toppled);
         toppled.len() - 1
     }
 }
@@ -176,8 +176,8 @@ fn main() {
     let stacking = Stacking::from_bricks(bricks);
     let sinfo = SupportInfo::from(&stacking);
 
-    let total = (0..sinfo.sz).filter(|&n| !sinfo.is_sole_support(n)).count();
-    println!("sum removable: {total}");
+    let total = (0..sinfo.sz).filter(|&n| sinfo.is_removable(n)).count();
+    println!("num removable: {total}");
 
     let ntopple: usize = (0..sinfo.sz).map(|n| sinfo.num_toppled(n)).sum();
     println!("toppled: {ntopple}");
