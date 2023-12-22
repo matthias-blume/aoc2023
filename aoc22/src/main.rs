@@ -6,11 +6,10 @@ use std::env;
 use std::fs;
 use std::collections::HashSet;
 
-#[derive(PartialEq,Eq,Clone,Copy,Hash,Debug,Ord,PartialOrd)]
 struct Point {
-    z: i64,
     x: i64,
     y: i64,
+    z: i64,
 }
 
 impl Point {
@@ -27,107 +26,136 @@ impl Point {
     }
 }
 
-#[derive(PartialEq,Eq,Clone,Copy,Hash,Debug,Ord,PartialOrd)]
+#[derive(Clone, Copy, PartialEq, Eq, Ord, PartialOrd, Hash)]
+struct Extent {
+    low: i64,
+    high: i64,
+}
+
+impl Extent {
+    fn from(x: i64, y: i64) -> Self {
+        if x < y { Extent{ low: x, high: y } }
+        else { Extent{ low: y, high: x } }
+    }
+
+    fn overlaps_with(&self, other: &Self) -> bool {
+        self.high >= other.low && other.high >= self.low
+    }
+}
+
+#[derive(PartialEq, Eq, PartialOrd, Ord)]
 struct Brick {
-    start: Point,
-    end: Point,
-}
-
-fn ordered_range(x: i64, y: i64) -> (i64, i64) {
-    if x < y { (x, y) } else { (y, x) }
-}
-
-fn intersect(or1: (i64, i64), or2: (i64, i64)) -> bool {
-    or1.1 >= or2.0 && or2.1 >= or1.0
+    z: Extent,  // (derived) lexicographic ordering prefers z
+    x: Extent,
+    y: Extent,
 }
 
 impl Brick {
+    fn from_points(p1: Point, p2: Point) -> Self {
+        Brick{
+            x: Extent::from(p1.x, p2.x),
+            y: Extent::from(p1.y, p2.y),
+            z: Extent::from(p1.z, p2.z),
+        }
+    }
+    
     fn from(s: &str) -> Self {
         match s.split("~").collect::<Vec<_>>().as_slice() {
-            [s1, s2] => {
-                let p1 = Point::from(s1);
-                let p2 = Point::from(s2);
-                if p1 < p2 {
-                    Brick{ start: p1, end: p2 }
-                } else {
-                    Brick{ start: p2, end: p1 }
-                }
-            },
+            [s1, s2] => Self::from_points(Point::from(s1), Point::from(s2)),
             _ => panic!("bad brick"),
         }
     }
 
-    fn xrange(&self) -> (i64, i64) {
-        ordered_range(self.start.x, self.end.x)
-    }
-
-    fn yrange(&self) -> (i64, i64) {
-        ordered_range(self.start.y, self.end.y)
-    }
-
     fn can_collide_with(&self, other: &Self) -> bool {
-        intersect(self.xrange(), other.xrange()) &&
-            intersect(self.yrange(), other.yrange())
+        self.x.overlaps_with(&other.x) &&
+            self.y.overlaps_with(&other.y)
     }
 
-    fn lower_into(&self, v: &mut Vec<Self>) {
-        let mut z = 1;
-        for i in 0..v.len() {
-            if v[i].can_collide_with(self) && v[i].end.z >= z {
-                z = v[i].end.z + 1
-            }
-        }
-        let d = self.start.z - z;
-        v.push(Brick{ start: Point{ z, ..self.start }, end: Point{ z: self.end.z - d, ..self.end } });
+    fn lower_into(&self, s: &mut Stacking) {
+        let z = (0..s.sz)
+            .filter_map(|i| s.bricks[i]
+                        .can_collide_with(self)
+                        .then_some(s.bricks[i].z.high + 1))
+            .max()
+            .unwrap_or(1);
+        s.bricks.push(
+            Brick{ z: Extent::from(z, self.z.high - self.z.low + z), ..*self });
+        s.sz += 1;
     }
 
     fn supports(&self, other: &Self) -> bool {
-        self.can_collide_with(other) &&
-            self.end.z + 1 == other.start.z
+        self.can_collide_with(other) && self.z.high + 1 == other.z.low
     }
 }
 
-fn num_support(v: &Vec<Brick>, n: usize) -> usize {
-    let mut num = 0;
-    for i in 0..n {
-        if v[i].supports(&v[n]) {
-            num += 1;
+struct Stacking {
+    sz: usize,
+    bricks: Vec<Brick>
+}
+
+type IndexVec = Vec<usize>;
+
+impl Stacking {
+    fn from_bricks(mut bricks: Vec<Brick>) -> Self {
+        bricks.sort();
+        let mut s = Stacking{ sz: 0, bricks: Vec::new() };
+        bricks.iter().for_each(|b| b.lower_into(&mut s));
+        s
+    }
+
+    fn supported(&self, n: usize) -> IndexVec {
+        let b = &self.bricks[n];
+        (n+1..self.sz).filter(|&i| b.supports(&self.bricks[i])).collect()
+    }
+
+    fn all_supported(&self) -> Vec<IndexVec> {
+        (0..self.sz).map(|i| self.supported(i)).collect()
+    }
+
+    fn supporters(&self, n: usize) -> IndexVec {
+        let b = &self.bricks[n];
+        (0..n).filter(|&i| self.bricks[i].supports(b)).collect()
+    }
+
+    fn all_supporters(&self) -> Vec<IndexVec> {
+        (0..self.sz).map(|i| self.supporters(i)).collect()
+    }
+}
+
+struct SupportInfo {
+    sz: usize,
+    supported: Vec<IndexVec>,
+    supporters: Vec<IndexVec>,
+}
+
+impl SupportInfo {
+    fn from(stacking: &Stacking) -> Self {
+        SupportInfo{
+            sz: stacking.sz,
+            supported: stacking.all_supported(),
+            supporters: stacking.all_supporters(),
         }
     }
-    num
-}
 
-fn supported(v: &Vec<Brick>, n: usize) -> Vec<usize> {
-    (n+1..v.len()).filter(|&i| v[n].supports(&v[i])).collect()
-}
+    fn is_sole_support(&self, n: usize) -> bool {
+        self.supported[n].iter().any(|&i| self.supporters[i].len() == 1)
+    }
 
-fn supporters(v: &Vec<Brick>, n: usize) -> Vec<usize> {
-    (0..n).filter(|&i| v[i].supports(&v[n])).collect()
-}
-
-fn is_lone_support(v: &Vec<Brick>, num_supports: &Vec<usize>, n: usize) -> bool {
-    for i in n+1 .. v.len() {
-        if v[n].supports(&v[i]) && num_supports[i] == 1 {
-            return true
+    fn destroy(&self, n: usize, toppled: &mut HashSet<usize>) {
+        if toppled.contains(&n) { return }
+        toppled.insert(n);
+        for j in self.supported[n].iter() {
+            if self.supporters[*j].iter().all(|k| toppled.contains(&k)) {
+                self.destroy(*j, toppled)
+            }
         }
     }
-    false
-}
 
-fn destruction(v: &Vec<Brick>, all_supported: &Vec<Vec<usize>>, all_supporters: &Vec<Vec<usize>>, n: usize, toppled: &mut HashSet<usize>) {
-    if toppled.contains(&n) { return }
-    toppled.insert(n);
-    for j in all_supported[n].iter() {
-        if all_supporters[*j].iter().all(|k| toppled.contains(&k)) {
-            destruction(v, all_supported, all_supporters, *j, toppled);
-        }
+    fn num_toppled(&self, n: usize) -> usize {
+        let mut toppled = HashSet::new();
+        self.destroy(n, &mut toppled);
+        toppled.len() - 1
     }
-}
-
-fn num_toppled(v: &Vec<Brick>, all_supported: &Vec<Vec<usize>>, all_supporters: &Vec<Vec<usize>>, n: usize) -> usize {
-    let mut toppled = HashSet::new();
-    destruction(v, all_supported, all_supporters, n, &mut toppled);
-    toppled.len() - 1
 }
 
 fn main() {
@@ -144,27 +172,13 @@ fn main() {
     let contents = fs::read_to_string(file_path)
         .expect("Could not read file");
 
-    let mut bricks = contents.lines().map(Brick::from).collect::<Vec<_>>();
+    let bricks = contents.lines().map(Brick::from).collect::<Vec<_>>();
+    let stacking = Stacking::from_bricks(bricks);
+    let sinfo = SupportInfo::from(&stacking);
 
-    bricks.sort();
+    let total = (0..sinfo.sz).filter(|&n| !sinfo.is_sole_support(n)).count();
+    println!("sum removable: {total}");
 
-    let mut lowered = Vec::new();
-    for b in bricks.iter() {
-        b.lower_into(&mut lowered);
-    }
-    
-    let num_supports = (0..lowered.len()).map(|n| num_support(&lowered, n)).collect::<Vec<_>>();
-    let total = (0..lowered.len()).filter(|&n| !is_lone_support(&lowered, &num_supports, n)).count();
-    
-    println!("{total}");
-
-    let all_supported = (0..lowered.len()).map(|n| supported(&lowered, n)).collect::<Vec<_>>();
-    let all_supporters = (0..lowered.len()).map(|n| supporters(&lowered, n)).collect::<Vec<_>>();
-
-    let mut ntopple = 0;
-    for n in 0..lowered.len() {
-        ntopple += num_toppled(&lowered, &all_supported, &all_supporters, n);
-    }
-
+    let ntopple: usize = (0..sinfo.sz).map(|n| sinfo.num_toppled(n)).sum();
     println!("toppled: {ntopple}");
 }
