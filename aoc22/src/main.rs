@@ -58,7 +58,7 @@ impl Brick {
             z: Extent::from(p1.z, p2.z),
         }
     }
-    
+
     fn from(s: &str) -> Self {
         match s.split("~").collect::<Vec<_>>().as_slice() {
             [s1, s2] => Self::from_points(Point::from(s1), Point::from(s2)),
@@ -71,45 +71,47 @@ impl Brick {
             self.y.overlaps_with(&other.y)
     }
 
-    fn lower_into(&self, s: &mut Stacking) {
-        let z = (0..s.sz)
-            .filter_map(|i| s.bricks[i]
-                        .can_collide_with(self)
-                        .then_some(s.bricks[i].z.high + 1))
-            .max()
-            .unwrap_or(1);
-        s.bricks.push(
-            Brick{ z: Extent::from(z, self.z.high - self.z.low + z), ..*self });
-        s.sz += 1;
-    }
-
     fn supports(&self, other: &Self) -> bool {
         self.can_collide_with(other) && self.z.high + 1 == other.z.low
     }
 }
 
 struct Stacking {
-    sz: usize,
     bricks: Vec<Brick>
 }
 
 type IndexSet = HashSet<usize>;
 
 impl Stacking {
+    fn len(&self) -> usize {
+        self.bricks.len()
+    }
+
+    fn insert(&mut self, b: &Brick) {
+        let z = (0..self.len())
+            .filter_map(|i| self.bricks[i]
+                        .can_collide_with(b)
+                        .then_some(self.bricks[i].z.high + 1))
+            .max()
+            .unwrap_or(1);
+        self.bricks.push(
+            Brick{ z: Extent::from(z, b.z.high - b.z.low + z), ..*b });
+    }
+
     fn from_bricks(mut bricks: Vec<Brick>) -> Self {
         bricks.sort();
-        let mut s = Stacking{ sz: 0, bricks: Vec::new() };
-        bricks.iter().for_each(|b| b.lower_into(&mut s));
+        let mut s = Stacking{ bricks: Vec::new() };
+        bricks.iter().for_each(|b| s.insert(b));
         s
     }
 
     fn supported(&self, n: usize) -> IndexSet {
         let b = &self.bricks[n];
-        (n+1..self.sz).filter(|&i| b.supports(&self.bricks[i])).collect()
+        (n+1..self.len()).filter(|&i| b.supports(&self.bricks[i])).collect()
     }
 
     fn all_supported(&self) -> Vec<IndexSet> {
-        (0..self.sz).map(|i| self.supported(i)).collect()
+        (0..self.len()).map(|i| self.supported(i)).collect()
     }
 
     fn supporters(&self, n: usize) -> IndexSet {
@@ -118,7 +120,7 @@ impl Stacking {
     }
 
     fn all_supporters(&self) -> Vec<IndexSet> {
-        (0..self.sz).map(|i| self.supporters(i)).collect()
+        (0..self.len()).map(|i| self.supporters(i)).collect()
     }
 }
 
@@ -131,7 +133,7 @@ struct SupportInfo {
 impl SupportInfo {
     fn from(stacking: &Stacking) -> Self {
         SupportInfo{
-            sz: stacking.sz,
+            sz: stacking.len(),
             supported: stacking.all_supported(),
             supporters: stacking.all_supporters(),
         }
