@@ -4,7 +4,6 @@
 
 use std::env;
 use std::fs;
-use std::collections::HashSet;
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 enum Spot {
@@ -55,7 +54,7 @@ struct Field {
 }
 
 type Pos = (i64, i64);
-type PosSet = HashSet<Pos>;
+type PosSet = Vec<Vec<bool>>;
 
 fn north(p: Pos) -> Pos {
     (p.0 - 1, p.1)
@@ -71,6 +70,24 @@ fn west(p: Pos) -> Pos {
 
 fn east(p: Pos) -> Pos {
     (p.0, p.1 + 1)
+}
+
+fn is_occupied(ps: &PosSet, p: Pos) -> bool {
+    ps[p.0 as usize][p.1 as usize]
+}
+
+fn occupy(ps: &mut PosSet, p: Pos) {
+    ps[p.0 as usize][p.1 as usize] = true;
+}
+
+fn vacate(ps: &mut PosSet, p: Pos) {
+    ps[p.0 as usize][p.1 as usize] = false;
+}
+
+fn pos_set(height: i64, width: i64) -> PosSet {
+    (0..height as usize)
+        .map(|_| (0..width as usize).map(|_| false).collect())
+        .collect()
 }
 
 impl Field {
@@ -101,7 +118,7 @@ impl Field {
                  longest: &mut usize) {
         if p.0 < 0 || p.0 >= self.height ||
             p.1 < 0 || p.1 >= self.width ||
-            visited.contains(&p) {
+            is_occupied(visited, p) {
                 return
             };
         let f = self.at(p);
@@ -110,7 +127,7 @@ impl Field {
             *longest = steps.max(*longest);
             return
         }
-        visited.insert(p);
+        occupy(visited, p);
         let steps = steps + 1;
         let next =
             match f {
@@ -123,12 +140,12 @@ impl Field {
             };
         next.into_iter()
             .for_each(|np| self.all_paths(np, steps, visited, longest));
-        visited.remove(&p);
+        vacate(visited, p);
     }
 
     fn longest_path(&self) -> usize {
         let mut longest = 0;
-        let mut visited = HashSet::new();
+        let mut visited = pos_set(self.height, self.width);
         self.all_paths(self.start(), 0, &mut visited, &mut longest);
         longest
     }
