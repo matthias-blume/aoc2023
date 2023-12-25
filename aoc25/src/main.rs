@@ -5,135 +5,99 @@
 use std::env;
 use std::fs;
 use std::collections::{HashMap,HashSet};
-use pathfinding::directed::edmonds_karp::*;
+use pathfinding::directed::edmonds_karp::edmonds_karp_sparse;
 
-struct Interner<'a> {
-    mapping: HashMap<&'a str, usize>,
+type Node<'a> = &'a str;
+type NodeSet<'a> = HashSet<Node<'a>>;
+type NodeVector<'a> = Vec<Node<'a>>;
+type Edge<'a> = (Node<'a>, Node<'a>);
+type EdgeSet<'a> = HashSet<Edge<'a>>;
+
+struct Graph<'a> {
+    nodes: NodeVector<'a>,
+    edges: EdgeSet<'a>,
+    successors: HashMap<Node<'a>, NodeSet<'a>>,
 }
 
-impl<'a> Interner<'a> {
+impl<'a> Graph<'a> {
     fn new() -> Self {
-        Interner{ mapping: HashMap::new() }
-    }
-
-    fn intern(&mut self, s: &'a str) -> usize {
-        if let Some(&n) = self.mapping.get(&s) {
-            n
-        } else {
-            let n = self.mapping.len();
-            self.mapping.insert(s, n);
-            n
+        Graph{
+            nodes: Vec::new(),
+            edges: HashSet::new(),
+            successors: HashMap::new(),
         }
     }
-}
 
-struct Graph {
-    nodes: HashSet<usize>,
-    edges: HashSet<(usize, usize)>,
-    successors: HashMap<usize, HashSet<usize>>,
-}
-
-impl Graph {
-    fn new() -> Self {
-        Graph{ nodes: HashSet::new(), edges: HashSet::new(), successors: HashMap::new() }
+    fn insert_node(&mut self, n: Node<'a>) {
+        if !self.nodes.contains(&n) {
+            self.nodes.push(n);
+        }
     }
-
-    fn insert_edge(&mut self, x: usize, y: usize) {
-        self.nodes.insert(x);
-        self.nodes.insert(y);
-        let edge = if x < y { (x, y) } else { (y, x) };
-        self.edges.insert(edge);
-        if let Some(ref mut s) = self.successors.get_mut(&x) {
-            s.insert(y);
+    
+    fn insert_edge(&mut self, e: Edge<'a>) {
+        self.edges.insert(e);
+        if let Some(ref mut s) = self.successors.get_mut(&e.0) {
+            s.insert(e.1);
         } else {
             let mut s = HashSet::new();
-            s.insert(y);
-            self.successors.insert(x, s);
-        }
-        if let Some(ref mut s) = self.successors.get_mut(&y) {
-            s.insert(x);
-        } else {
-            let mut s = HashSet::new();
-            s.insert(x);
-            self.successors.insert(y, s);
+            s.insert(e.1);
+            self.successors.insert(e.0, s);
         }
     }
-
-    fn visit_all(&self, n: usize, visited: &mut HashSet<usize>, ignored_nodes: &HashSet<usize>, ignored_edges: &HashSet<(usize, usize)>) {
-        if ignored_nodes.contains(&n) { return }
-        if visited.contains(&n) { return }
+    
+    fn visit_all(&self, n: Node<'a>,
+                 visited: &mut NodeSet<'a>,
+                 ignored: &NodeSet<'a>) {
+        if ignored.contains(&n) || visited.contains(&n) { return }
         visited.insert(n);
         if let Some(s) = self.successors.get(&n) {
             for &m in s {
-                let e = if n < m { (n, m) } else { (m, n) };
-                if !ignored_edges.contains(&e) {
-                    self.visit_all(m, visited, ignored_nodes, ignored_edges)
-                }
+                self.visit_all(m, visited, ignored);
             }
         }
     }
 
-    fn extract_component(&self, deleted_nodes: &mut HashSet<usize>, ignored_edges: &HashSet<(usize, usize)>) -> Option<HashSet<usize>> {
-        if let Some(&n) = self.nodes.iter().filter(|i| !deleted_nodes.contains(i)).next() {
-            let mut visited = HashSet::new();
-            self.visit_all(n, &mut visited, deleted_nodes, ignored_edges);
-            for i in visited.iter() {
-                deleted_nodes.insert(*i);
-            }
-            Some(visited)
-        } else {
-            None
-        }
+    fn num_reachable(&self, n: Node<'a>, ignored: &NodeSet<'a>) -> usize {
+        let mut visited = HashSet::new();
+        self.visit_all(n, &mut visited, ignored);
+        visited.len()
     }
-
-    fn to_components(&self, ignored_edges: &HashSet<(usize, usize)>) -> Vec<HashSet<usize>> {
-        let mut v = Vec::new();
-        let mut deleted = HashSet::new();
-        while let Some(c) = self.extract_component(&mut deleted, ignored_edges) {
-            v.push(c);
-        }
-        v
-    }
-
-    fn read_line<'a>(&mut self, s: &'a str, interner: &mut Interner<'a>) {
+    
+    fn read_line(&mut self, s: &'a str) {
         match s.split(":").collect::<Vec<_>>().as_slice() {
             [left, right] => {
-                let x = interner.intern(left.trim());
-                let ys =
-                    right.split_whitespace().map(|y| interner.intern(y)).collect::<Vec<_>>();
-                for y in ys.into_iter() {
-                    self.insert_edge(x, y);
+                let x = left.trim();
+                for y in right.split_whitespace() {
+                    self.insert_node(x);
+                    self.insert_node(y);
+                    self.insert_edge((x, y));
+                    self.insert_edge((y, x));
                 }
             },
             _ => panic!("bad line"),
         }
     }
 
-
     fn ek(&self, n: usize) -> Option<usize> {
-        let vertices = self.nodes.iter().cloned().collect::<Vec<_>>();
-        let mut caps: Vec<((usize, usize), i32)> = Vec::new();
-        for &(x, y) in self.edges.iter() {
-            caps.push(((x, y), 1));
-            caps.push(((y, x), 1));
+        let v0 = self.nodes[0];
+        let vn = self.nodes[n];
+        match edmonds_karp_sparse(&self.nodes, &v0, &vn,
+                                  self.edges.iter().cloned().map(|e| (e, 1))) {
+            (_, 3, mc) => {
+                let ignored_from_0 =
+                    mc.iter().map(|((_, y), _)| y).cloned().collect();
+                let ignored_from_n =
+                    mc.iter().map(|((x, _), _)| x).cloned().collect();
+                let num_0 = self.num_reachable(v0, &ignored_from_0);
+                let num_n = self.num_reachable(vn, &ignored_from_n);
+                Some(num_0 * num_n)
+            },
+            _ => None
         }
-        let (_, _, mc) = edmonds_karp::<usize, i32, std::vec::IntoIter<((usize, usize), i32)>, DenseCapacity<i32>>(
-            &vertices, &0, &n, caps.into_iter());
-        if mc.len() != 3 {
-            return None;
-        }
-        let ignored = mc.iter().map(|&((x, y), _)| if x < y { (x, y) } else { (y, x) }).collect();
-        let components = self.to_components(&ignored);
-        Some(components[0].len() * components[1].len())
     }
 
     fn find_ek(&self) -> usize {
-        for i in 1..self.nodes.len() {
-            if let Some(prod) = self.ek(i) {
-                return prod
-            }
-        }
-        0
+        (1..self.nodes.len()).find_map(|i| self.ek(i)).unwrap_or(0)
     }
 }
 
@@ -152,9 +116,8 @@ fn main() {
         .expect("Could not read file");
 
     let mut g = Graph::new();
-    let mut interner = Interner::new();
     for line in contents.lines() {
-        g.read_line(line, &mut interner);
+        g.read_line(line);
     }
 
     let prod = g.find_ek();
