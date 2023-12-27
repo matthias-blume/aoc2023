@@ -143,9 +143,9 @@ fn main() {
     let mut count = 0;
     for i in 0..states.len() {
         for j in i+1..states.len() {
-            let ph1 = states[i];
-            let ph2 = states[j];
-            if let Some(v) = xy_collision(ph1, ph2) {
+            let s1 = states[i];
+            let s2 = states[j];
+            if let Some(v) = xy_collision(s1, s2) {
                 if v.x >= low && v.x <= high && v.y >= low && v.y <= high {
                     count += 1;
                 }
@@ -167,19 +167,27 @@ fn main() {
     // them along with the rest.
 
     // Matrix rows alternate between y- and z-types, one of each per input.
-    let yrow = | s: &State | { vec![1.0, 0.0, -s.velocity.y, s.velocity.x, 0.0, s.position.y, -s.position.x, 0.0] };
-    let zrow = | s: &State | { vec![0.0, 1.0, -s.velocity.z, 0.0, s.velocity.x, s.position.z, 0.0, -s.position.x] };
+    let yrow = | i | { let s: State = states[i];
+                       vec![1.0, 0.0,
+                            -s.velocity.y, s.velocity.x, 0.0,
+                            s.position.y, -s.position.x, 0.0] };
+    let zrow = | i | { let s: State = states[i];
+                       vec![0.0, 1.0,
+                            -s.velocity.z, 0.0, s.velocity.x,
+                            s.position.z, 0.0, -s.position.x] };
 
     // Likewise, right-hand sides alternate between y- and z-types.
-    let yrhs = | s: &State | { s.velocity.x * s.position.y - s.position.x * s.velocity.y };
-    let zrhs = | s: &State | { s.velocity.x * s.position.z - s.position.x * s.velocity.z };
+    let yrhs = | i | { let s: State = states[i];
+                       s.velocity.x * s.position.y - s.position.x * s.velocity.y };
+    let zrhs = | i | { let s: State = states[i];
+                       s.velocity.x * s.position.z - s.position.x * s.velocity.z };
     
     // Set up the system of linear equations.
     // Coefficient matrix m:
-    let m: Vec<Vec<f64>> = (0..4).flat_map(|i| [yrow(&states[i]), zrow(&states[i])]).collect();
+    let m = (0..4).flat_map(|i| [yrow(i), zrow(i)]).collect();
 
     // Right-hand side vector b:
-    let b: Vec<f64> = (0..4).flat_map(|i| [yrhs(&states[i]), zrhs(&states[i])]).collect();
+    let b = (0..4).flat_map(|i| [yrhs(i), zrhs(i)]).collect();
 
     if let Some(solution) = gauss(m, b) {
         // Slots 0 and 1 contain solutions for the above mentioned
