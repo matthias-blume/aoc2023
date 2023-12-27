@@ -31,11 +31,11 @@ struct State {
     velocity: Vector,
 }
 
-impl State{
+impl State {
     fn from(s: &str) -> Self {
         match s.split("@").collect::<Vec<_>>().as_slice() {
             [p, v] =>
-                State{
+                State {
                     position: Vector::from(p),
                     velocity: Vector::from(v)
                 },
@@ -44,25 +44,28 @@ impl State{
     }
 }
 
-// Find "future" (t>=0) x-y coordinates where
-// the projections of the two vectors into the x-y plane
-// intersect.
-fn xy_collision(
-    State{
-        position: Vector{ x: x1, y: y1, .. },
-        velocity: Vector{ x: vx1, y: vy1, .. }
-    }: State,
-    State{
-        position: Vector{ x: x2, y: y2, .. },
-        velocity: Vector{ x: vx2, y: vy2, .. }
-    }: State) -> Option<Vector> {
+// Find x-y coordinates where the projections of the two vectors
+// into the x-y plane intersect.
+// Determine whether all of the following are true:
+//  - The intersection exists.
+//  - It lies in the future (t >= 0) for both vectors.
+//  - Both x and y coordinates of the intersection lie within
+//    the interval low..=high.
+fn has_xy_collision(
+    State { position: Vector{ x: x1, y: y1, .. },
+            velocity: Vector{ x: vx1, y: vy1, .. } }: State,
+    State{ position: Vector{ x: x2, y: y2, .. },
+           velocity: Vector{ x: vx2, y: vy2, .. } }: State,
+    low: f64, high: f64) -> bool {
     let d = vy1 * vx2 - vx1 * vy2;
-    if d == 0.0 { return None }
+    if d == 0.0 { return false }  // parallel
     let t = ((x1 - x2) * vy2 - (y1 - y2) * vx2) / d;
-    if t < 0.0 { return None }
+    if t < 0.0 { return false }   // in the past for one
     let t2 = ((x1 - x2) + t * vx1) / vx2;
-    if t2 < 0.0 { return None }
-    Some(Vector{ x: x1 + t * vx1, y: y1 + t * vy1, z: 0.0 })
+    if t2 < 0.0 { return false }  // .. or for the other
+    let x = x1 + t * vx1;
+    let y = y1 + t * vy1;
+    x >= low && x <= high && y >= low && y <= high
 }
 
 // Solve set of linear equations using Gaussian elimination.
@@ -77,7 +80,7 @@ fn gauss(mut m: Vec<Vec<f64>>, mut b: Vec<f64>) -> Option<Vec<f64>> {
         for i in h+1..n {
             if m[i][h].abs() > m[i_max][h].abs() { i_max = i }
         }
-        if m[i_max][h] == 0.0 { return None }
+        if m[i_max][h] == 0.0 { return None }  // determinant 0
         if i_max != h {
             m.swap(h, i_max);
             b.swap(h, i_max);
@@ -103,32 +106,16 @@ fn gauss(mut m: Vec<Vec<f64>>, mut b: Vec<f64>) -> Option<Vec<f64>> {
 }
 
 fn main() {
-    let mut args = env::args();
-    let program = match args.next() {
-        Some(arg) => arg,
-        _ => panic!("no program name"),
-    };
-    let file_path = match args.next() {
-        Some(arg) => arg,
-        _ => panic!("{}: no input file name", program),
-    };
-
-    let default_low = 200_000_000_000_000.0;
-    let default_high = 400_000_000_000_000.0;
-    
-    let (low, high) =
-        match args.next() {
-            Some(arg) => {
-                let l: f64 = arg.parse().expect("low");
-                match args.next() {
-                    Some(arg) => {
-                        let h: f64 = arg.parse().expect("high");
-                        (l, h)
-                    },
-                    None => (l, default_high),
-                }
-            },
-            None => (default_low, default_high),
+    let (file_path, low, high) =
+        match env::args().collect::<Vec<_>>().as_slice() {
+            [_, fp] =>
+                (fp.clone(), 200_000_000_000_000.0, 400_000_000_000_000.0),
+            [_, fp, l, h] =>
+                (fp.clone(), l.parse().expect("low"), h.parse().expect("high")),
+            [p, ..] =>
+                panic!("usage: {} <file>   or   {} <file> <low> <high>", p, p),
+            [] =>
+                panic!("empty command line args"),
         };
 
     let contents = fs::read_to_string(file_path)
@@ -140,24 +127,17 @@ fn main() {
     }
 
     // Part 1:
-    let mut count = 0;
-    for i in 0..states.len() {
-        for j in i+1..states.len() {
-            let s1 = states[i];
-            let s2 = states[j];
-            if let Some(v) = xy_collision(s1, s2) {
-                if v.x >= low && v.x <= high && v.y >= low && v.y <= high {
-                    count += 1;
-                }
-            }
-        }
-    }
+    let count: usize = (0..states.len())
+        .map(|i| (i+1..states.len())
+             .filter(|&j| has_xy_collision(states[i], states[j], low, high))
+             .count())
+        .sum();
 
     println!("part 1: {count}");
 
     // Part 2:
-    // Grab the first four inputs and construct the matrix of coefficients
-    // as well as the right-hand sides.
+    //
+    // Grab the first four inputs and construct system of linear equations.
     //
     // Notes: Any four should do. Three inputs already determine
     // the solution, but the resulting system of equations is
@@ -178,11 +158,12 @@ fn main() {
 
     // Likewise, right-hand sides alternate between y- and z-types.
     let yrhs = | i | { let s: State = states[i];
-                       s.velocity.x * s.position.y - s.position.x * s.velocity.y };
+                       s.velocity.x * s.position.y
+                       - s.position.x * s.velocity.y };
     let zrhs = | i | { let s: State = states[i];
-                       s.velocity.x * s.position.z - s.position.x * s.velocity.z };
+                       s.velocity.x * s.position.z
+                       - s.position.x * s.velocity.z };
     
-    // Set up the system of linear equations.
     // Coefficient matrix m:
     let m = (0..4).flat_map(|i| [yrow(i), zrow(i)]).collect();
 
