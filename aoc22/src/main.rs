@@ -5,6 +5,9 @@
 use std::env;
 use std::fs;
 use std::collections::HashSet;
+use std::error::Error;
+
+type Result<T> = std::result::Result<T, Box<dyn Error>>;
 
 struct Point {
     x: i64,
@@ -13,15 +16,15 @@ struct Point {
 }
 
 impl Point {
-    fn from(s: &str) -> Self {
-        match s.split(",").collect::<Vec<_>>().as_slice() {
+    fn try_from(s: &str) -> Result<Self> {
+        match s.split(",").collect::<Vec<_>>()[..] {
             [xs, ys, zs] =>
-                Point{
-                    x: xs.parse().expect("x"),
-                    y: ys.parse().expect("y"),
-                    z: zs.parse().expect("z"),
-                },
-            _ => panic!("bad point"),
+                Ok(Point{
+                    x: xs.parse()?,
+                    y: ys.parse()?,
+                    z: zs.parse()?,
+                }),
+            _ => Err("bad point".into()),
         }
     }
 }
@@ -59,10 +62,11 @@ impl Brick {
         }
     }
 
-    fn from(s: &str) -> Self {
-        match s.split("~").collect::<Vec<_>>().as_slice() {
-            [s1, s2] => Self::from_points(Point::from(s1), Point::from(s2)),
-            _ => panic!("bad brick"),
+    fn try_from(s: &str) -> Result<Self> {
+        match s.split("~").collect::<Vec<_>>()[..] {
+            [s1, s2] => Ok(Self::from_points(Point::try_from(s1)?,
+                                             Point::try_from(s2)?)),
+            _ => Err("bad brick".into()),
         }
     }
 
@@ -87,21 +91,21 @@ impl Stacking {
         self.bricks.len()
     }
 
-    fn insert(&mut self, b: &Brick) {
+    fn insert(&mut self, b: Brick) {
         let z = (0..self.len())
             .filter_map(|i| self.bricks[i]
-                        .can_collide_with(b)
+                        .can_collide_with(&b)
                         .then_some(self.bricks[i].z.high + 1))
             .max()
             .unwrap_or(1);
         self.bricks.push(
-            Brick{ z: Extent::from(z, b.z.high - b.z.low + z), ..*b });
+            Brick{ z: Extent::from(z, b.z.high - b.z.low + z), ..b });
     }
 
     fn from_bricks(mut bricks: Vec<Brick>) -> Self {
         bricks.sort();
         let mut s = Stacking{ bricks: Vec::new() };
-        bricks.iter().for_each(|b| s.insert(b));
+        bricks.into_iter().for_each(|b| s.insert(b));
         s
     }
 
@@ -113,68 +117,62 @@ impl Stacking {
     fn all_supported(&self) -> Vec<IndexSet> {
         (0..self.len()).map(|i| self.supported(i)).collect()
     }
-
-    fn supporters(&self, n: usize) -> IndexSet {
-        let b = &self.bricks[n];
-        (0..n).filter(|&i| self.bricks[i].supports(b)).collect()
-    }
-
-    fn all_supporters(&self) -> Vec<IndexSet> {
-        (0..self.len()).map(|i| self.supporters(i)).collect()
-    }
 }
 
 struct SupportInfo {
     sz: usize,
     supported: Vec<IndexSet>,
-    supporters: Vec<IndexSet>,
+    num_supporters: Vec<usize>,
 }
 
 impl SupportInfo {
     fn from(stacking: &Stacking) -> Self {
-        SupportInfo{
-            sz: stacking.len(),
-            supported: stacking.all_supported(),
-            supporters: stacking.all_supporters(),
-        }
+        let sz = stacking.len();
+        let supported = stacking.all_supported();
+        let mut num_supporters = vec![0; sz];
+        supported.iter()
+            .for_each(|s| s.iter()
+                      .for_each(|&i| num_supporters[i] += 1));
+        SupportInfo{ sz, supported, num_supporters }
     }
 
     fn is_removable(&self, n: usize) -> bool {
-        self.supported[n].iter().all(|&i| self.supporters[i].len() != 1)
-    }
-
-    fn topple(&self, n: usize, toppled: &mut HashSet<usize>) {
-        if toppled.contains(&n) { return }
-        toppled.insert(n);
-        for j in self.supported[n].iter() {
-            if self.supporters[*j].is_subset(&toppled) {
-                self.topple(*j, toppled)
-            }
-        }
+        self.supported[n].iter().all(|&i| self.num_supporters[i] != 1)
     }
 
     fn num_toppled(&self, n: usize) -> usize {
-        let mut toppled = HashSet::new();
-        self.topple(n, &mut toppled);
-        toppled.len() - 1
+        let mut remaining_support = self.num_supporters.clone();
+        let mut count = 0;
+        let mut stack = Vec::new();
+        stack.push(n);
+        while let Some(i) = stack.pop() {
+            for &j in &self.supported[i] {
+                remaining_support[j] -= 1;
+                if remaining_support[j] == 0 {
+                    count += 1;
+                    stack.push(j);
+                }
+            }
+        }
+        count
     }
 }
 
-fn main() {
+fn main() -> Result<()> {
     let mut args = env::args();
     let program = match args.next() {
         Some(arg) => arg,
-        _ => panic!("no program name"),
+        _ => { return Err("no program name".into()) },
     };
     let file_path = match args.next() {
         Some(arg) => arg,
-        _ => panic!("{}: no input file name", program),
+        _ => { return Err(format!("{}: no input file name", program).into()) },
     };
 
-    let contents = fs::read_to_string(file_path)
-        .expect("Could not read file");
+    let contents = fs::read_to_string(file_path)?;
 
-    let bricks = contents.lines().map(Brick::from).collect::<Vec<_>>();
+    let bricks: Vec<Brick> =
+        contents.lines().map(Brick::try_from).collect::<Result<_>>()?;
     let stacking = Stacking::from_bricks(bricks);
     let sinfo = SupportInfo::from(&stacking);
 
@@ -183,4 +181,6 @@ fn main() {
 
     let ntopple: usize = (0..sinfo.sz).map(|n| sinfo.num_toppled(n)).sum();
     println!("toppled: {ntopple}");
+
+    Ok(())
 }
