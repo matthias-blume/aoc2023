@@ -36,13 +36,7 @@ impl<'a> Graph<'a> {
     
     fn insert_edge(&mut self, e: Edge<'a>) {
         self.edges.insert(e);
-        if let Some(ref mut s) = self.successors.get_mut(&e.0) {
-            s.insert(e.1);
-        } else {
-            let mut s = HashSet::new();
-            s.insert(e.1);
-            self.successors.insert(e.0, s);
-        }
+        self.successors.entry(e.0).or_default().insert(e.1);
     }
     
     fn visit_all(&self, n: Node<'a>,

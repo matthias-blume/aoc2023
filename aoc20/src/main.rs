@@ -29,12 +29,25 @@ impl Element {
     
     fn from<'a>(s: &'a str, interner: &mut Interner<'a>) -> Self {
         match s.split("->").map(str::trim).collect::<Vec<_>>().as_slice() {
-            ["broadcaster", right] =>
-                Element{ typ: NOP, num: 0, ins: Vec::new(), outs: Element::get_outs(right, interner) },
+            ["broadcaster", right] => Element{
+                typ: NOP,
+                num: 0,
+                ins: Vec::new(),
+                outs: Element::get_outs(right, interner),
+            },
             [left, right] => {
                 let name = &left[1..];
-                let typ = match &left[0..1] { "&" => NAND, "%" => FF, _ => panic!("bad type") };
-                Element{ typ, num: interner.intern(name), ins: Vec::new(), outs: Element::get_outs(right, interner) }
+                let typ = match &left[0..1] {
+                    "&" => NAND,
+                    "%" => FF,
+                    _ => panic!("bad type"),
+                };
+                Element{
+                    typ,
+                    num: interner.intern(name),
+                    ins: Vec::new(),
+                    outs: Element::get_outs(right, interner),
+                }
             },
             _ => panic!("bad element"),
         }
@@ -42,32 +55,25 @@ impl Element {
 }
 
 struct Interner<'a> {
-    next: usize,
     mapping: HashMap<&'a str, usize>,
 }
 
 impl<'a> Interner<'a> {
     fn new() -> Self {
-        Interner{ next: 1, mapping: HashMap::new() } // 0 is broadcaster
+        Self{ mapping: HashMap::from([("*", 0)]) } // 0 is broadcaster
     }
 
     fn intern(&mut self, name: &'a str) -> usize {
-        if let Some(&num) = self.mapping.get(name) {
-            num
-        } else {
-            let num = self.next;
-            self.next += 1;
-            self.mapping.insert(name, num);
-            num
-        }
+        let n = self.size();
+        *self.mapping.entry(name).or_insert(n)
     }
 
     fn size(&self) -> usize {
-        self.next
+        self.mapping.len()
     }
 
     fn known(&self, name: &'a str) -> Option<usize> {
-        self.mapping.get(name).map(|&x| x)
+        self.mapping.get(name).cloned()
     }
 }
 
@@ -80,11 +86,11 @@ impl<'a> Circuit<'a> {
     fn from(input: &'a str) -> Self {
         let mut interner = Interner::new();
         let mut elements = HashMap::new();
-        let mut ins_table = HashMap::new();
+        let mut ins_table: HashMap<_, Vec<_>> = HashMap::new();
         for line in input.lines() {
             let element = Element::from(line, &mut interner);
             for &out in element.outs.iter() {
-                ins_table.entry(out).or_insert_with(Vec::new).push(element.num);
+                ins_table.entry(out).or_default().push(element.num);
             }
             elements.insert(element.num, element);
         }
@@ -92,9 +98,17 @@ impl<'a> Circuit<'a> {
         let mut circuit = Circuit{ interner, elements: Vec::new() };
         for i in 0..nelem {
             if let Some(element) = elements.remove(&i) {
-                circuit.elements.push(Element{ ins: ins_table.remove(&i).unwrap_or_else(Vec::new), ..element });
+                circuit.elements.push(Element{
+                    ins: ins_table.remove(&i).unwrap_or_default(),
+                    ..element
+                });
             } else {
-                circuit.elements.push(Element{ num: i, typ: NOP, ins: ins_table.remove(&i).unwrap_or_else(Vec::new), outs: Vec::new() });
+                circuit.elements.push(Element{
+                    num: i,
+                    typ: NOP,
+                    ins: ins_table.remove(&i).unwrap_or_default(),
+                    outs: Vec::new(),
+                });
             }
         }
         circuit
