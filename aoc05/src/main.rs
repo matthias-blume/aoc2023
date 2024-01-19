@@ -21,28 +21,28 @@ struct RangeMap {
 impl Range {
     // Build valid range from start and end point (if possible).
     fn start_end(s: u64, e: u64) -> Option<Self> {
-        if e > s { Some(Range(s, e - s)) } else { None }
+        if e > s { Some(Self(s, e - s)) } else { None }
     }
 
     // Left overhang (non-empty portion of x that lies outside to the left of y).
-    fn left_overhang(self, Range(ys, _): Range) -> Option<Range> {
+    fn left_overhang(self, Self(ys, _): Self) -> Option<Self> {
         Self::start_end(self.0, min(ys, self.0 + self.1))
     }
 
     // Intersection of x and y (non-empty portion that lies within both).
-    fn intersection(self, Range(ys, yl): Range) -> Option<Range> {
-        Range::start_end(max(self.0, ys), min(self.0 + self.1, ys + yl))
+    fn intersection(self, Self(ys, yl): Self) -> Option<Self> {
+        Self::start_end(max(self.0, ys), min(self.0 + self.1, ys + yl))
     }
 
     // Right overhang (non-empty portion of x that lies outside to the right of y).
-    fn right_overhang(self, Range(ys, yl): Range) -> Option<Range> {
-        Range::start_end(max(self.0, ys + yl), self.0 + self.1)
+    fn right_overhang(self, Self(ys, yl): Self) -> Option<Self> {
+        Self::start_end(max(self.0, ys + yl), self.0 + self.1)
     }
 
     // Apply a single RangeMap to this range, assuming that it lies fully
     // within the source range of the RangeMap.
-    fn single_map(self, m: &RangeMap) -> Range {
-        Range(self.0 + m.dst_start - m.src.0, self.1)
+    fn single_map(self, m: &RangeMap) -> Self {
+        Self(self.0 + m.dst_start - m.src.0, self.1)
     }
 
     // Apply full mapping to a single Range.
@@ -51,8 +51,8 @@ impl Range {
     // how it intersects with the various source ranges within the mapping.
     //
     // The mapping is sorted by increasing source ranges.
-    fn map_into(self, sorted_mapping: &Vec<RangeMap>, dest: &mut Vec<Range>) {
-        let mut x: Range = self;
+    fn map_into(self, sorted_mapping: &Vec<RangeMap>, dest: &mut Vec<Self>) {
+        let mut x = self;
         for rm in sorted_mapping {
             if let Some(l) = x.left_overhang(rm.src) { dest.push(l) }
             if let Some(m) = x.intersection(rm.src) { dest.push(m.single_map(&rm)) }

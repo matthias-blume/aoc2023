@@ -94,13 +94,7 @@ impl Step {
                 (North, West) | (East, South) => SW,
                 _ => panic!("not a corner"),
             };
-            if let Some(ref mut row) = board.get_mut(&prev.0) {
-                row.insert(prev.1, corner);
-            } else {
-                let mut row = BTreeMap::new();
-                row.insert(prev.1, corner);
-                board.insert(prev.0, row);
-            }
+            board.entry(prev.0).or_default().insert(prev.1, corner);
             prev_d = step.0;
         }
         board

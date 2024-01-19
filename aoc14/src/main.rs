@@ -2,10 +2,10 @@
 // Day 14
 // Author: Matthias Blume
 
+use num;
+use std::collections::HashMap;
 use std::env;
 use std::fs;
-use std::collections::HashMap;
-use num;
 
 #[derive(PartialEq, Eq, Clone, Copy)]
 enum Item {
@@ -16,11 +16,17 @@ enum Item {
 use crate::Item::*;
 
 #[derive(Copy, Clone)]
-enum TiltAxis { Hor, Vert }
+enum TiltAxis {
+    Hor,
+    Vert,
+}
 use crate::TiltAxis::*;
 
 #[derive(Copy, Clone)]
-enum Direction { Up, Down }
+enum Direction {
+    Up,
+    Down,
+}
 use crate::Direction::*;
 
 #[derive(PartialEq, Eq, Hash)]
@@ -28,10 +34,16 @@ struct RowSummary(u8, Vec<u8>);
 
 impl RowSummary {
     fn for_row(r: u8, row: &Vec<Item>) -> Option<Self> {
-        let v = row.iter().enumerate()
+        let v = row
+            .iter()
+            .enumerate()
             .filter_map(|(c, &item)| if item == Round { Some(c as u8) } else { None })
             .collect::<Vec<_>>();
-        if v.len() > 0 { Some(RowSummary(r, v)) } else { None }
+        if v.len() > 0 {
+            Some(RowSummary(r, v))
+        } else {
+            None
+        }
     }
 }
 
@@ -54,17 +66,25 @@ impl Board {
     }
 
     fn at<'a>(&'a mut self, i: usize, j: usize, axis: TiltAxis) -> &'a mut Item {
-        match axis { Hor => &mut self.items[i][j], Vert => &mut self.items[j][i] }
+        match axis {
+            Hor => &mut self.items[i][j],
+            Vert => &mut self.items[j][i],
+        }
     }
 
     fn tilt(mut self, axis: TiltAxis, direction: Direction) -> Self {
-        let iend = match axis { Hor => self.nrows, Vert => self.ncols };
-        let jend = match axis { Hor => self.ncols, Vert => self.nrows };
-        let (istart, istop, increment) =
-            match direction {
-                Down => (0, iend as i32 - 1, 1),
-                Up => (iend as i32 - 1, 0, -1),
-            };
+        let iend = match axis {
+            Hor => self.nrows,
+            Vert => self.ncols,
+        };
+        let jend = match axis {
+            Hor => self.ncols,
+            Vert => self.nrows,
+        };
+        let (istart, istop, increment) = match direction {
+            Down => (0, iend as i32 - 1, 1),
+            Up => (iend as i32 - 1, 0, -1),
+        };
         for j in 0..jend {
             let mut free = istart;
             for i in num::range_step_inclusive(istart, istop, increment) {
@@ -76,13 +96,13 @@ impl Board {
                         free = new_i + increment;
                         *self.at(i as usize, j, axis) = Nothing;
                         *self.at(new_i as usize, j, axis) = Round;
-                    },
+                    }
                 }
             }
         }
         self
     }
-    
+
     fn cycle(self) -> Self {
         self.tilt(Hor, Down) // north
             .tilt(Vert, Down) // west
@@ -94,16 +114,18 @@ impl Board {
         self.items
             .iter()
             .enumerate()
-            .map(|(r, row)|
-                 (self.nrows - r)
-                 * row.iter().filter(|&item| item == &Round).count())
+            .map(|(r, row)| (self.nrows - r) * row.iter().filter(|&item| item == &Round).count())
             .sum()
     }
 
     fn summarize(&self) -> Summary {
-        Summary(self.items.iter().enumerate()
+        Summary(
+            self.items
+                .iter()
+                .enumerate()
                 .filter_map(|(r, row)| RowSummary::for_row(r as u8, row))
-                .collect())
+                .collect(),
+        )
     }
 
     fn ncycle(mut self, n: u64) -> Self {
@@ -112,8 +134,10 @@ impl Board {
             let summary = self.summarize();
             if let Some(prev_i) = history.get(&summary) {
                 let remaining = (n - prev_i) % (i - prev_i);
-                for _ in 0..remaining { self = self.cycle(); }
-                return self
+                for _ in 0..remaining {
+                    self = self.cycle();
+                }
+                return self;
             } else {
                 history.insert(summary, i);
                 self = self.cycle();
@@ -145,8 +169,7 @@ fn main() {
         _ => panic!("{}: no input file name", program),
     };
 
-    let contents = fs::read_to_string(file_path)
-        .expect("Could not read file");
+    let contents = fs::read_to_string(file_path).expect("Could not read file");
 
     let mut v = Vec::new();
     for line in contents.lines() {
@@ -155,6 +178,6 @@ fn main() {
 
     let part1 = Board::new(v.clone()).tilt(Hor, Down).weight();
     let part2 = Board::new(v).ncycle(1000000000).weight();
-    
+
     println!("part1: {part1}, part2: {part2}");
 }

@@ -5,9 +5,9 @@
 use std::env;
 use std::fs;
 use std::collections::HashSet;
-use std::error::Error;
-
-type Result<T> = std::result::Result<T, Box<dyn Error>>;
+use std::str::FromStr;
+use std::convert::From;
+use std::result::Result;
 
 struct Point {
     x: i64,
@@ -15,8 +15,18 @@ struct Point {
     z: i64,
 }
 
-impl Point {
-    fn try_from(s: &str) -> Result<Self> {
+#[derive(Debug, PartialEq, Eq)]
+struct ParsePointError;
+
+impl From<std::num::ParseIntError> for ParsePointError {
+    fn from(_: std::num::ParseIntError) -> Self {
+        ParsePointError
+    }
+}
+
+impl FromStr for Point {
+    type Err = ParsePointError;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s.split(",").collect::<Vec<_>>()[..] {
             [xs, ys, zs] =>
                 Ok(Point{
@@ -24,7 +34,7 @@ impl Point {
                     y: ys.parse()?,
                     z: zs.parse()?,
                 }),
-            _ => Err("bad point".into()),
+            _ => Err(ParsePointError),
         }
     }
 }
@@ -53,20 +63,31 @@ struct Brick {
     y: Extent,
 }
 
+#[derive(Debug, PartialEq, Eq)]
+struct ParseBrickError;
+
+impl From<ParsePointError> for ParseBrickError {
+    fn from(_: ParsePointError) -> Self {
+        ParseBrickError
+    }
+}
+
+impl FromStr for Brick {
+    type Err = ParseBrickError;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.split("~").collect::<Vec<_>>()[..] {
+            [s1, s2] => Ok(Self::from_points(s1.parse()?, s2.parse()?)),
+            _ => Err(ParseBrickError),
+        }
+    }
+}
+
 impl Brick {
     fn from_points(p1: Point, p2: Point) -> Self {
         Brick{
             x: Extent::from(p1.x, p2.x),
             y: Extent::from(p1.y, p2.y),
             z: Extent::from(p1.z, p2.z),
-        }
-    }
-
-    fn try_from(s: &str) -> Result<Self> {
-        match s.split("~").collect::<Vec<_>>()[..] {
-            [s1, s2] => Ok(Self::from_points(Point::try_from(s1)?,
-                                             Point::try_from(s2)?)),
-            _ => Err("bad brick".into()),
         }
     }
 
@@ -158,21 +179,38 @@ impl SupportInfo {
     }
 }
 
-fn main() -> Result<()> {
+#[derive(Debug, PartialEq, Eq)]
+struct MainError {
+    msg: String,
+}
+
+impl From<ParseBrickError> for MainError {
+    fn from(_: ParseBrickError) -> Self {
+        MainError{ msg: String::from("unable to parse brick") }
+    }
+}
+
+impl From<std::io::Error> for MainError {
+    fn from(e: std::io::Error) -> Self {
+        MainError{ msg: format!("I/O error: {}", e) }
+    }
+}
+
+fn main() -> Result<(), MainError> {
     let mut args = env::args();
     let program = match args.next() {
         Some(arg) => arg,
-        _ => { return Err("no program name".into()) },
+        _ => { return Err(MainError{ msg: String::from("no program name") }) },
     };
     let file_path = match args.next() {
         Some(arg) => arg,
-        _ => { return Err(format!("{}: no input file name", program).into()) },
+        _ => { return Err(MainError{ msg: format!("{}: no input file name", program) }) },
     };
 
     let contents = fs::read_to_string(file_path)?;
 
     let bricks: Vec<Brick> =
-        contents.lines().map(Brick::try_from).collect::<Result<_>>()?;
+        contents.lines().map(|s| s.parse()).collect::<Result<_, _>>()?;
     let stacking = Stacking::from_bricks(bricks);
     let sinfo = SupportInfo::from(&stacking);
 
