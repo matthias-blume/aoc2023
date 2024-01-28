@@ -83,7 +83,7 @@ fn gear_ratio_sum_of(stars: &HashSet<i32>, prev: &Vec<Number>, cur: &Vec<Number>
         collect_adjacents(*star, prev, &mut adjacents);
         collect_adjacents(*star, cur, &mut adjacents);
         collect_adjacents(*star, next, &mut adjacents);
-        if let [adj1, adj2] = adjacents.as_slice() {
+        if let [adj1, adj2] = adjacents[..] {
             sum += adj1 * adj2
         }
     }

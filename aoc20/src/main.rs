@@ -6,6 +6,8 @@ use std::env;
 use std::fs;
 use std::collections::{HashMap,VecDeque};
 
+use util::iter::*;
+
 enum Type {
     NOP,
     NAND,
@@ -28,7 +30,7 @@ impl Element {
     }
     
     fn from<'a>(s: &'a str, interner: &mut Interner<'a>) -> Self {
-        match s.split("->").map(str::trim).collect::<Vec<_>>().as_slice() {
+        match s.split("->").map(str::trim).boxed()[..] {
             ["broadcaster", right] => Element{
                 typ: NOP,
                 num: 0,

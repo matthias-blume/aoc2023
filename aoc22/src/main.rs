@@ -9,6 +9,8 @@ use std::str::FromStr;
 use std::convert::From;
 use std::result::Result;
 
+use util::iter::*;
+
 struct Point {
     x: i64,
     y: i64,
@@ -27,7 +29,7 @@ impl From<std::num::ParseIntError> for ParsePointError {
 impl FromStr for Point {
     type Err = ParsePointError;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s.split(",").collect::<Vec<_>>()[..] {
+        match s.split(",").boxed()[..] {
             [xs, ys, zs] =>
                 Ok(Point{
                     x: xs.parse()?,
@@ -75,7 +77,7 @@ impl From<ParsePointError> for ParseBrickError {
 impl FromStr for Brick {
     type Err = ParseBrickError;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s.split("~").collect::<Vec<_>>()[..] {
+        match s.split("~").boxed()[..] {
             [s1, s2] => Ok(Self::from_points(s1.parse()?, s2.parse()?)),
             _ => Err(ParseBrickError),
         }

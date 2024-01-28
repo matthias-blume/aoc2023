@@ -7,6 +7,8 @@ use std::fs::File;
 use std::path::Path;
 use std::io::{BufRead, BufReader};
 
+use util::iter::*;
+
 #[derive(Debug, Ord, PartialOrd, Eq, PartialEq)]
 enum HandType {
     HighCard,
@@ -130,7 +132,7 @@ fn main() {
     
     for line_result in reader.lines() {
         let line = line_result.expect("line");
-        match line.split_whitespace().collect::<Vec<_>>().as_slice() {
+        match line.split_whitespace().boxed()[..] {
             [h, b] => hand_bid_table.push((hand(h, treat_j_as_joker), b.parse::<u64>().unwrap())), 
             _ => panic!("invalid input"),
         }

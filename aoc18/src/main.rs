@@ -6,6 +6,8 @@ use std::env;
 use std::fs;
 use std::collections::BTreeMap;
 
+use util::iter::*;
+
 #[derive(PartialEq, Clone, Copy, Debug)]
 enum Tile {
     NE,
@@ -61,10 +63,10 @@ impl Step {
     }
     
     fn from(line: &str, part: Part) -> Self {
-        match (line.split_whitespace().collect::<Vec<_>>().as_slice(), part) {
-            ([dir, dist, _], Part::One) =>
+        match (&line.split_whitespace().boxed()[..], part) {
+            (&[dir, dist, _], Part::One) =>
                 Step(Direction::from(dir), dist.parse::<i64>().expect("distance")),
-            ([_, _, col], Part::Two) =>
+            (&[_, _, col], Part::Two) =>
                 Step::from_color(col),
             _ => panic!("bad step"),
         }

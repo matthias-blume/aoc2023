@@ -6,10 +6,12 @@ use std::env;
 use std::fs;
 use std::collections::HashMap;
 
+use util::iter::*;
+
 // Splits input line into the map part (a String) and the vector of
 // group lengths.
 fn read_line(line: &str) -> (String, Vec<u64>) {
-    match line.split_whitespace().collect::<Vec<_>>().as_slice() {
+    match line.split_whitespace().boxed()[..] {
         [s, nums] =>
             (s.to_string(),
              nums.split(",")

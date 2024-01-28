@@ -7,6 +7,8 @@ use std::fs;
 
 mod data {
 
+    use util::iter::*;
+
     #[derive(PartialEq, Eq, Clone, Copy)]
     pub enum Action<'a> {
         Accept,
@@ -76,7 +78,7 @@ mod data {
 
     impl<'a> Rule<'a> {
         fn from(s: &'a str) -> Self {
-            match s.split(":").collect::<Vec<_>>().as_slice() {
+            match s.split(":").boxed()[..] {
                 [cond_str, act_str] =>
                     Rule{
                         condition: Condition::from(cond_str),
@@ -95,10 +97,10 @@ mod data {
 
     impl<'a> Workflow<'a> {
         pub fn from(s: &'a str) -> Self {
-            match s.split("{").collect::<Vec<_>>().as_slice() {
+            match s.split("{").boxed()[..] {
                 [name, rest] => {
-                    match rest[..rest.len()-1].split(",").collect::<Vec<_>>().as_slice() {
-                        [rule_strings @ .., catchall_string] =>
+                    match rest[..rest.len()-1].split(",").boxed()[..] {
+                        [ref rule_strings @ .., catchall_string] =>
                             Workflow {
                                 name: name,
                                 rules: rule_strings.iter().map(|&s| Rule::from(s)).collect(),

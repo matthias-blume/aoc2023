@@ -7,6 +7,8 @@ use std::fs::File;
 use std::path::Path;
 use std::io::{BufRead, BufReader};
 
+use util::iter::*;
+
 fn num_winning_inputs((&time_limit, &previous_max): (&f64, &f64)) -> f64 {
     let tl2 = time_limit / 2.0;
     let r = (tl2 * tl2 - previous_max - 1.0).sqrt();
@@ -14,7 +16,7 @@ fn num_winning_inputs((&time_limit, &previous_max): (&f64, &f64)) -> f64 {
 }
 
 fn main() {
-    if let [_, file_path] = env::args().collect::<Vec<_>>().as_slice() {
+    if let [_, file_path] = &env::args().boxed()[..] {
 
         let path = Path::new(file_path);
         let file = File::open(&path).expect("open file");
@@ -25,7 +27,7 @@ fn main() {
         
         for line_result in reader.lines() {
             let line = line_result.expect("line");
-            match line.split_whitespace().collect::<Vec<_>>().as_slice() {
+            match &line.split_whitespace().boxed()[..] {
                 ["Time:", times_str @ ..] =>
                     times = times_str.iter().map(|s| s.parse().unwrap()).collect(),
                 ["Distance:", distances_str @ ..] =>
