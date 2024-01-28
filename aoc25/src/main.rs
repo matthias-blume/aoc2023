@@ -7,6 +7,8 @@ use std::fs;
 use std::collections::{HashMap,HashSet};
 use pathfinding::directed::edmonds_karp::edmonds_karp_sparse;
 
+use util::iter::*;
+
 type Node<'a> = &'a str;
 type NodeSet<'a> = HashSet<Node<'a>>;
 type NodeVector<'a> = Vec<Node<'a>>;
@@ -58,7 +60,7 @@ impl<'a> Graph<'a> {
     }
     
     fn read_line(&mut self, s: &'a str) {
-        match s.split(":").collect::<Vec<_>>().as_slice() {
+        match s.split(":").boxed()[..] {
             [left, right] => {
                 let x = left.trim();
                 for y in right.split_whitespace() {
@@ -79,9 +81,9 @@ impl<'a> Graph<'a> {
                                   self.edges.iter().cloned().map(|e| (e, 1))) {
             (_, 3, mc) => {
                 let ignored_from_0 =
-                    mc.iter().map(|((_, y), _)| y).cloned().collect();
+                    mc.iter().map(|((_, y), _)| *y).collect();
                 let ignored_from_n =
-                    mc.iter().map(|((x, _), _)| x).cloned().collect();
+                    mc.iter().map(|((x, _), _)| *x).collect();
                 let num_0 = self.num_reachable(v0, &ignored_from_0);
                 let num_n = self.num_reachable(vn, &ignored_from_n);
                 Some(num_0 * num_n)

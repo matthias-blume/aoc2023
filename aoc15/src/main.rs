@@ -5,6 +5,8 @@
 use std::env;
 use std::fs;
 
+use util::iter::*;
+
 mod hash {
     pub fn ascii(s: &str) -> usize {
         s.as_bytes().iter().fold(0, |accu, &c| ((accu + c as usize) * 17) % 256)
@@ -24,7 +26,7 @@ use crate::Instruction::*;
 
 impl<'a> Instruction<'a> {
     fn from(input: &'a str) -> Self {
-        match input.split("=").collect::<Vec<_>>().as_slice() {
+        match input.split("=").boxed()[..] {
             [label, s] => {
                 let strength = s.parse().expect("lens strength");
                 AddLens{ label, strength, hash: hash::ascii(label) }

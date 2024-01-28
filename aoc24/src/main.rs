@@ -5,6 +5,8 @@
 use std::env;
 use std::fs;
 
+use util::iter::*;
+
 #[derive(Copy, Clone, Debug)]
 struct Vector {
     x: f64,
@@ -14,7 +16,7 @@ struct Vector {
 
 impl Vector {
     fn from(s: &str) -> Self {
-        match s.split(",").map(str::trim).collect::<Vec<_>>().as_slice() {
+        match s.split(",").map(str::trim).boxed()[..] {
             [xs, ys, zs] => Vector{
                 x: xs.parse().expect("x"),
                 y: ys.parse().expect("y"),
@@ -33,7 +35,7 @@ struct State {
 
 impl State {
     fn from(s: &str) -> Self {
-        match s.split("@").collect::<Vec<_>>().as_slice() {
+        match s.split("@").boxed()[..] {
             [p, v] =>
                 State {
                     position: Vector::from(p),
@@ -107,7 +109,7 @@ fn gauss(mut m: Vec<Vec<f64>>, mut b: Vec<f64>) -> Option<Vec<f64>> {
 
 fn main() {
     let (file_path, low, high) =
-        match env::args().collect::<Vec<_>>().as_slice() {
+        match &env::args().boxed()[..] {
             [_, fp] =>
                 (fp.clone(), 200_000_000_000_000.0, 400_000_000_000_000.0),
             [_, fp, l, h] =>

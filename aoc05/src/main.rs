@@ -10,6 +10,8 @@ use std::io::BufReader;
 use std::cmp::min;
 use std::cmp::max;
 
+use util::iter::*;
+
 #[derive(Clone, Copy)]
 struct Range(u64, u64); // (start, len)
 
@@ -87,17 +89,17 @@ fn apply_mapping(cur: Vec<Range>, mapping: Vec<RangeMap>) -> Vec<Range> {
 // Upon seeing a new map type, checks that the old kind matches the
 // map's source.  Then returns the new kind.
 fn changed_kind(kind: String, map_type: &str) -> String {
-    match map_type.split("-").collect::<Vec<_>>().as_slice() {
+    match map_type.split("-").boxed()[..] {
         [from, "to", to] => {
-            if kind != *from { panic!("wrong transition for {}: {}-to-{}", kind, from, to) }
-            String::from(*to)
+            if kind != from { panic!("wrong transition for {}: {}-to-{}", kind, from, to) }
+            String::from(to)
         },
         _ => panic!("bad map type: {}", map_type),
     }
 }
 
 fn main() {
-    if let [_, file_path] = env::args().collect::<Vec<_>>().as_slice() {
+    if let [_, file_path] = &env::args().boxed()[..] {
 
         let path = Path::new(file_path);
         let file = File::open(&path).expect("open file");
@@ -109,7 +111,7 @@ fn main() {
         
         for line_result in reader.lines() {
             let line = line_result.expect("line");
-            match line.split_whitespace().collect::<Vec<_>>().as_slice() {
+            match &line.split_whitespace().boxed()[..] {
                 ["seeds:", seeds_strings @ ..] => {
                     kind = String::from("seed");
                     cur = seeds(seeds_strings)

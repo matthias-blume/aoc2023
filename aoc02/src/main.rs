@@ -5,6 +5,8 @@
 use std::env;
 use std::fs;
 
+use util::iter::*;
+
 struct Triplet(u32, u32, u32);
 
 fn read_color(input: &str) -> Triplet {
@@ -31,7 +33,7 @@ fn read_triplets(input: &str) -> Vec<Triplet> {
 }
 
 fn read_game_number(input: &str) -> u32 {
-    match input.split_whitespace().collect::<Vec<&str>>().as_slice() {
+    match input.split_whitespace().boxed()[..] {
         ["Game", number_str] => number_str.parse().expect("number"),
         _ => panic!("missing or malformed Game spec"),
     }

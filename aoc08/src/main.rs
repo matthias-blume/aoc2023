@@ -6,6 +6,8 @@ use std::env;
 use std::fs;
 use std::collections::HashMap;
 
+use util::iter::*;
+
 fn step<'a>(d: char, state: &'a String, directions: &'a HashMap<String, (String, String)>) -> &'a String {
     let (l, r) = directions.get(state).unwrap();
     match d {
@@ -72,13 +74,13 @@ fn main() {
     let mut directions = HashMap::new();
 
     for line in contents.lines() {
-        match line.split("=").collect::<Vec<_>>().as_slice() {
+        match line.split("=").boxed()[..] {
             [""] => (),
             [word] => { rl = word.to_string() },
             [] => (),
             [lhs, rhs] => {
                 if rhs.len() != 11 { panic!("bad rhs") }
-                match rhs[2..10].split(",").collect::<Vec<_>>().as_slice() {
+                match rhs[2..10].split(",").boxed()[..] {
                     [l, r] => { directions.insert(lhs[0..3].to_string(), (l[0..3].to_string(), r[1..4].to_string())); },
                     _ => { panic!("expected (l, r), found {}", rhs) },
                 }
